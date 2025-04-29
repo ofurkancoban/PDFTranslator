@@ -1,169 +1,154 @@
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const axios = require('axios');
-const path = require('path');
+import puppeteer from 'puppeteer';
+import fs from 'fs';
+import path from 'path';
+import fetch from 'node-fetch';
+import FormData from 'form-data';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// CONFIG
 const TARGET_URL = 'https://www.onlinedoctranslator.com/en/translationform';
-const INPUT_FILE_PATH = './document.pdf';
-const DOWNLOAD_DIR = path.resolve('./indirilenler');
-const API_KEY = '3e71c09ed20cd28f6588180347c17070'; // 2Captcha Key
+const FILE_PATH = './document.pdf'; // Yüklenecek dosyanın yolu
+const API_KEY = process.env.API_KEY; // .env içinden 2Captcha API anahtarı
+const DOWNLOAD_DIR = './translated'; // İndirilecek klasör
+const TARGET_LANGUAGE = 'fr'; // 🌐 Buraya hedef dil kodunu yaz ('en', 'de', 'fr', 'tr', vs.)
 
-// 2Captcha çözüm fonksiyonu
-async function solveRecaptcha(siteKey, pageUrl) {
-    console.log('[INFO] 2Captcha çözüm başlatılıyor...');
-    const res = await axios.post('http://2captcha.com/in.php', null, {
-        params: {
-            key: API_KEY,
-            method: 'userrecaptcha',
-            googlekey: siteKey,
-            pageurl: pageUrl,
-            json: 1
-        }
-    });
-    const requestId = res.data.request;
-    console.log('[INFO] Task ID:', requestId);
+// ✅ 2Captcha çözümü
+async function solveCaptcha(sitekey, pageUrl) {
+  const form = new FormData();
+  form.append('key', API_KEY);
+  form.append('method', 'userrecaptcha');
+  form.append('googlekey', sitekey);
+  form.append('pageurl', pageUrl);
+  form.append('json', 1);
 
-    for (let i = 0; i < 30; i++) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        const check = await axios.get('http://2captcha.com/res.php', {
-            params: {
-                key: API_KEY,
-                action: 'get',
-                id: requestId,
-                json: 1
-            }
-        });
-        if (check.data.status === 1) {
-            return check.data.request;
-        }
+  const res = await fetch('http://2captcha.com/in.php', { method: 'POST', body: form });
+  const { request: requestId } = await res.json();
+
+  console.log('⏳ CAPTCHA gönderildi, çözüm bekleniyor...');
+  for (let i = 0; i < 24; i++) {
+    await new Promise(res => setTimeout(res, 5000));
+    const check = await fetch(`http://2captcha.com/res.php?key=${API_KEY}&action=get&id=${requestId}&json=1`);
+    const result = await check.json();
+    if (result.status === 1) {
+      console.log('✅ CAPTCHA çözüldü.');
+      return result.request;
     }
-    throw new Error('CAPTCHA çözümü zaman aşımına uğradı.');
+  }
+  throw new Error('❌ CAPTCHA çözülmedi.');
 }
 
-// Ana Fonksiyon
-async function main() {
-    if (!fs.existsSync(DOWNLOAD_DIR)) {
-        fs.mkdirSync(DOWNLOAD_DIR);
-    }
+// ✅ Browser içinde gerçek dosya indirme
+async function downloadWithPuppeteerFetch(page, url, destinationPath) {
+  const buffer = await page.evaluate(async (url) => {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    return Array.from(new Uint8Array(arrayBuffer));
+  }, url);
 
-    const browser = await puppeteer.launch({
-        headless: false,
-        args: [
-            '--window-size=1200,800',
-            '--no-sandbox',
-            '--disable-setuid-sandbox'
-        ]
-    });
-
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1200, height: 800 });
-    await page.goto(TARGET_URL, { waitUntil: 'networkidle2' });
-
-    console.log('[INFO] Sayfa açıldı, dosya yükleniyor...');
-
-    // Dosya yükle
-    const fileInput = await page.waitForSelector('input[type=file]');
-    await fileInput.uploadFile(INPUT_FILE_PATH);
-
-    console.log('[INFO] Dosya yüklendi, CAPTCHA çözülüyor...');
-
-    // Site key bul
-    await page.waitForSelector('iframe[src*="recaptcha"]');
-    const frameHandle = await page.$('iframe[src*="recaptcha"]');
-    const src = await frameHandle.evaluate(el => el.getAttribute('src'));
-    const siteKey = src.split('k=')[1].split('&')[0];
-    console.log('[INFO] Site key bulundu:', siteKey);
-
-    // 2Captcha ile çözüm al
-    const token = await solveRecaptcha(siteKey, TARGET_URL);
-    console.log('[INFO] CAPTCHA token alındı.');
-
-    // Token'ı enjekte et
-    await page.evaluate((token) => {
-        let textarea = document.querySelector('textarea[name="g-recaptcha-response"]');
-        if (!textarea) {
-            textarea = document.createElement('textarea');
-            textarea.name = 'g-recaptcha-response';
-            textarea.style = 'display:none';
-            document.body.appendChild(textarea);
-        }
-        textarea.value = token;
-    }, token);
-
-    console.log('[INFO] CAPTCHA token enjekte edildi, callback tetikleniyor...');
-
-    // Callback fonksiyonu tetikle
-    await page.evaluate((token) => {
-        if (typeof recaptchaCallbackTranslator === 'function') {
-            recaptchaCallbackTranslator(token);
-        }
-    }, token);
-
-    // Translate buton aktifleşmesini bekle
-    await page.waitForFunction(() => {
-        const btn = document.querySelector('#translation-button');
-        return btn && !btn.disabled;
-    }, { timeout: 60000 });
-
-    console.log('[INFO] Translate butonu aktifleşti, gerçek click gönderiliyor...');
-
-    // Native click
-    await page.evaluate(() => {
-        const btn = document.querySelector('#translation-button');
-        if (btn) {
-            btn.click();
-        }
-    });
-
-    // Navigation bekle
-    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 120000 }).catch(() => {
-        console.warn('[WARN] Navigation timeout, devam ediliyor...');
-    });
-
-    console.log('[INFO] Çeviri işlemi başladı, indirilebilir dosya aranıyor...');
-
-    // Doğru indirilebilir linki bekle
-    await page.waitForFunction(() => {
-        const link = document.querySelector('#download-link');
-        return link && link.href && !link.href.endsWith('/gettranslateddocument');
-    }, { timeout: 60000 });
-
-    const fullDownloadUrl = await page.evaluate(() => {
-        const link = document.querySelector('#download-link');
-        return link ? link.href : null;
-    });
-
-    if (!fullDownloadUrl) {
-        throw new Error('İndirme linki bulunamadı!');
-    }
-
-    console.log('[INFO] Doğru indirme linki bulundu:', fullDownloadUrl);
-
-    // Puppeteer'dan cookies çek
-    const cookies = await page.cookies();
-    const cookieHeader = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
-
-    // Axios ile dosya indir (cookie ile)
-    const response = await axios.get(fullDownloadUrl, {
-        responseType: 'arraybuffer',
-        headers: {
-            'Cookie': cookieHeader,
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36 Edg/135.0.0.0',
-            'Accept': 'application/pdf',
-            'Referer': 'https://www.onlinedoctranslator.com/app/translationprocess-pdf',
-        }
-    });
-
-    // Dosyayı kaydet
-    const fileName = path.basename(fullDownloadUrl);
-    const filePath = path.join(DOWNLOAD_DIR, fileName);
-    fs.writeFileSync(filePath, response.data);
-
-    console.log(`✅ Dosya başarıyla indirildi: ${filePath}`);
-
-    await browser.close();
+  fs.writeFileSync(destinationPath, Buffer.from(buffer));
 }
 
-// Çalıştır
-main().catch(err => console.error('❌ Hata:', err.message));
+(async () => {
+  const browser = await puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+  const page = await browser.newPage();
+
+  await page.goto(TARGET_URL, { waitUntil: 'networkidle2' });
+
+  // 🌐 Hedef dil seçimi (dosya yüklemeden önce!)
+  await page.select('#to', TARGET_LANGUAGE);
+  console.log(`🌐 Hedef dil "${TARGET_LANGUAGE}" olarak seçildi.`);
+
+  // 📤 Dosyayı yükle
+  const fileInput = await page.$('input[type="file"]');
+  const absolutePath = path.resolve(FILE_PATH);
+  await fileInput.uploadFile(absolutePath);
+  console.log('📤 Dosya yüklendi.');
+
+  // 🔑 Sitekey al
+  await page.waitForSelector('iframe[src*="recaptcha"]');
+  const frameEl = await page.$('iframe[src*="recaptcha"]');
+  const src = await frameEl.evaluate(el => el.getAttribute('src'));
+  const sitekey = src.split('k=')[1].split('&')[0];
+  console.log('🔑 Sitekey:', sitekey);
+
+  // 🧠 CAPTCHA çöz
+  const token = await solveCaptcha(sitekey, TARGET_URL);
+
+  // 💉 Token enjekte et
+  await page.evaluate(token => {
+    let textarea = document.querySelector("textarea[name='g-recaptcha-response']");
+    if (!textarea) {
+      textarea = document.createElement("textarea");
+      textarea.name = "g-recaptcha-response";
+      textarea.style = "display:none";
+      document.querySelector("form").appendChild(textarea);
+    }
+    textarea.value = token;
+  }, token);
+
+  // 🔄 Callback tetikle
+  await page.evaluate(token => {
+    if (typeof recaptchaCallbackTranslator === 'function') {
+      recaptchaCallbackTranslator(token);
+    }
+  }, token);
+  console.log('✅ CAPTCHA token enjekte edildi ve callback tetiklendi.');
+
+  // ⏳ 10 saniye bekle
+  await new Promise(resolve => setTimeout(resolve, 10000));
+  console.log('⏳ 10 saniye bekleme tamamlandı. Translate tetiklenecek.');
+
+  // Translate butonu aktifleşince
+  await page.waitForSelector('#translation-button', { timeout: 30000 });
+  await page.waitForFunction(() => {
+    const button = document.querySelector('#translation-button');
+    return button && !button.disabled;
+  }, { timeout: 30000 });
+
+  // 📘 Translate butonuna arka planda tıklama
+  await page.evaluate(() => {
+    const button = document.querySelector('#translation-button');
+    if (button) {
+      const event = new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      });
+      button.dispatchEvent(event);
+    }
+  });
+  console.log('📘 Translate butonuna arka planda tıklama tetiklendi.');
+
+  // 📄 Sayfa yönlendirmesini bekle
+  await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
+  console.log('📄 Yeni çeviri sayfası yüklendi.');
+
+  // 5 saniye bekle (sayfa tam otursun)
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
+  // 📥 İndirme bağlantısını al
+  const downloadHref = await page.evaluate(() => {
+    const link = document.querySelector('#download-link');
+    return link ? link.getAttribute('href') : null;
+  });
+
+  if (downloadHref) {
+    const fullUrl = downloadHref.startsWith('http')
+      ? downloadHref
+      : `https://www.onlinedoctranslator.com${downloadHref}`;
+
+    if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
+    const fileName = path.basename(fullUrl).split('?')[0];
+    const destination = path.join(DOWNLOAD_DIR, fileName);
+
+    await downloadWithPuppeteerFetch(page, fullUrl, destination);
+    console.log('✅ Dosya başarıyla indirildi:', destination);
+  } else {
+    console.log('⚠️ İndirme bağlantısı bulunamadı.');
+  }
+
+  await browser.close();
+})();
