@@ -8,10 +8,11 @@ import { spawn } from 'child_process';
 dotenv.config();
 
 const TARGET_URL = 'https://www.onlinedoctranslator.com/en/translationform';
-const FILE_PATH = './2025_CS4Science_Part1.pdf';
+const FILE_PATH = './document.pdf';
 const API_KEY = process.env.API_KEY;
 const DOWNLOAD_DIR = './translated';
-const TARGET_LANGUAGE = 'tr';
+const TARGET_LANGUAGE = 'de';
+const FROM_LANGUAGE = 'en'; // orijinal dosyanın dili
 
 async function solveCaptcha(sitekey, pageUrl) {
   const form = new FormData();
@@ -49,7 +50,7 @@ async function downloadWithPuppeteerFetch(page, url, destinationPath) {
 
 (async () => {
   const browser = await puppeteer.launch({
-    headless: 'new',
+    headless: false,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
@@ -132,7 +133,13 @@ async function downloadWithPuppeteerFetch(page, url, destinationPath) {
 
     // ✅ Python scriptini çağır
     console.log('⚙️ Python scripti tetikleniyor...');
-    const py = spawn('python', ['process_translated_pdf.py', FILE_PATH, destination]);
+    const pythonPath = path.resolve('./myenv/bin/python');
+    const py = spawn(pythonPath, [
+  'process_translated_pdf.py',
+  FILE_PATH,
+  destination,
+  FROM_LANGUAGE,
+  TARGET_LANGUAGE]);
 
     py.stdout.on('data', data => {
       console.log('📘 Python çıktı:', data.toString());
