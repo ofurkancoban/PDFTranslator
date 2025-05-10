@@ -4,18 +4,17 @@ from pathlib import Path
 import re
 import os
 
-if len(sys.argv) < 4:
-    print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang")
+if len(sys.argv) < 5:
+    print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang clean_filename")
     sys.exit(1)
 
 original_path = Path(sys.argv[1])
 translated_path = Path(sys.argv[2])
 to_lang = sys.argv[3]
+clean_filename = sys.argv[4]  # Get the clean filename from Node.js
 
-# Get the base filename without extension
-base_filename = os.path.splitext(os.path.basename(translated_path))[0]
 # Extract language codes from filename (e.g., "filename.en.de" -> "en" and "de")
-lang_codes = base_filename.split('.')[-2:]
+lang_codes = translated_path.stem.split('.')[-2:]
 if len(lang_codes) == 2:
     source_lang, target_lang = lang_codes
 else:
@@ -23,12 +22,9 @@ else:
     source_lang = 'auto'
     target_lang = to_lang
 
-# Get original filename from the original path
-original_filename = os.path.splitext(os.path.basename(original_path))[0]
-
-# Create output filenames
-single_output = f"{original_filename}_{source_lang}.{target_lang}_single.pdf"
-merged_output = f"{original_filename}_{source_lang}.{target_lang}_merged.pdf"
+# Create output filenames with clean names
+single_output = f"{clean_filename}_{source_lang}.{target_lang}_single.pdf"
+merged_output = f"{clean_filename}_{source_lang}.{target_lang}_merged.pdf"
 
 # Output paths
 patched_filename = single_output

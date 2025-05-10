@@ -161,15 +161,24 @@ async function runTranslation(filePath, targetLanguage) {
 
     if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
     
-    // Get original filename without extension
+    // Get original filename without extension and clean it
     const originalFilename = path.basename(filePath, '.pdf');
+    // Remove any language codes, parentheses and clean the filename
+    const cleanFilename = originalFilename
+      .split('.')[0]  // Remove language codes
+      .replace(/\([^)]*\)/g, '')  // Remove anything in parentheses
+      .replace(/\s+/g, '_')  // Replace spaces with underscores
+      .replace(/[^a-zA-Z0-9_-]/g, '')  // Remove special characters
+      .replace(/_+/g, '_')  // Replace multiple underscores with single underscore
+      .replace(/^_|_$/g, '')  // Remove leading and trailing underscores
+      .replace(/(\d+)_(\d+)/g, '$1_$2');  // Keep numbers separated by underscore
     
     // Extract source language from the downloaded file name
     const downloadFileName = path.basename(downloadHref);
     const sourceLang = downloadFileName.split('.')[1] || 'en'; // Get source language from downloaded file name
     
-    // Use original filename with correct format
-    const fileName = `${originalFilename}_${sourceLang}.${targetLanguage}.pdf`;
+    // Use clean filename with correct format
+    const fileName = `${cleanFilename}_${sourceLang}.${targetLanguage}.pdf`;
     const destination = path.join(DOWNLOAD_DIR, fileName);
 
     await downloadWithPuppeteerFetch(page, fullUrl, destination);
@@ -182,7 +191,8 @@ async function runTranslation(filePath, targetLanguage) {
       'process_translated_pdf.py',
       filePath,
       destination,
-      targetLanguage
+      targetLanguage,
+      cleanFilename  // Pass the clean filename to Python script
     ]);
 
     return new Promise((resolve, reject) => {
@@ -190,8 +200,8 @@ async function runTranslation(filePath, targetLanguage) {
       py.stderr.on('data', data => console.error('[PYTHON ERROR]', data.toString()));
       py.on('close', code => {
         if (code === 0) {
-          const singleFile = `${originalFilename}_${sourceLang}.${targetLanguage}_single.pdf`;
-          const mergedFile = `${originalFilename}_${sourceLang}.${targetLanguage}_merged.pdf`;
+          const singleFile = `${cleanFilename}_${sourceLang}.${targetLanguage}_single.pdf`;
+          const mergedFile = `${cleanFilename}_${sourceLang}.${targetLanguage}_merged.pdf`;
           resolve({
             single: `translated/${singleFile}`,
             merged: `translated/${mergedFile}`
