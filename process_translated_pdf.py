@@ -1,8 +1,8 @@
-
 import sys
 import fitz  # PyMuPDF
 from pathlib import Path
 import re
+import os
 
 if len(sys.argv) < 4:
     print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang")
@@ -12,28 +12,47 @@ original_path = Path(sys.argv[1])
 translated_path = Path(sys.argv[2])
 to_lang = sys.argv[3]
 
-match = re.search(r'\.([a-z]{2})\.([a-z]{2})\.pdf$', translated_path.name.lower())
-if match:
-    from_lang = match.group(1)
-    print(f"🌐 Detected source language: {from_lang}")
+# Get the base filename without extension
+base_filename = os.path.splitext(os.path.basename(translated_path))[0]
+# Extract language codes from filename (e.g., "filename.en.de" -> "en" and "de")
+lang_codes = base_filename.split('.')[-2:]
+if len(lang_codes) == 2:
+    source_lang, target_lang = lang_codes
 else:
-    from_lang = "auto"
+    print("⚠️ Could not detect source language from filename. Using 'auto'.")
+    source_lang = 'auto'
+    target_lang = to_lang
 
-patched_filename = f"{original_path.stem}_{from_lang}.{to_lang}_single.pdf"
+# Get original filename from the original path
+original_filename = os.path.splitext(os.path.basename(original_path))[0]
+
+# Create output filenames
+single_output = f"{original_filename}_{source_lang}.{target_lang}_single.pdf"
+merged_output = f"{original_filename}_{source_lang}.{target_lang}_merged.pdf"
+
+# Output paths
+patched_filename = single_output
 patched_path = translated_path.parent / patched_filename
 
-merged_filename = f"{original_path.stem}_{from_lang}.{to_lang}_merged.pdf"
+merged_filename = merged_output
 merged_path = translated_path.parent / merged_filename
 
+print(f"📝 Generated filenames:")
+print(f"  - Single: {patched_filename}")
+print(f"  - Merged: {merged_filename}")
+
+# ✅ Validate PDF
 try:
     doc = fitz.open(translated_path)
     if not doc.is_pdf or doc.page_count == 0:
         raise ValueError("Invalid or empty PDF.")
 except Exception as e:
-    print(f"❌ Invalid translated PDF: {translated_path}\nError:", e)
+    print(f"❌ Invalid translated PDF file: {translated_path}")
+    print("Error:", e)
     sys.exit(1)
 
-print("🧼 Removing watermark...")
+# 🧼 Remove watermark
+print("🧼 Removing watermark text...")
 for page in doc:
     blocks = page.get_text("blocks")
     for block in blocks:
@@ -42,7 +61,8 @@ for page in doc:
             page.add_redact_annot(rect, fill=(1, 1, 1))
     page.apply_redactions()
 
-print("🖼 Extracting and overlaying header...")
+# 🖼 Overlay header from original
+print("🖼 Extracting and overlaying top header from original...")
 orig = fitz.open(original_path)
 width, height = orig[0].rect.width, orig[0].rect.height
 clip_rect = fitz.Rect(0, 0, width, 20)
@@ -53,9 +73,10 @@ pix.save(pix_path)
 img_rect = fitz.Rect(0, 0, width, 20)
 doc[0].insert_image(img_rect, filename=pix_path)
 doc.save(patched_path)
-print(f"✅ Header added → {patched_path}")
+print(f"✅ Watermark removed and header added → {patched_path}")
 
-print("📘 Merging PDFs...")
+# 📘 Merge both PDFs
+print("📘 Merging original and translated PDFs...")
 patched = fitz.open(patched_path)
 merged = fitz.open()
 page_count = min(len(orig), len(patched))
@@ -66,6 +87,7 @@ for i in range(page_count):
     w2, h2 = patched[i].rect.width, patched[i].rect.height
 
     if is_portrait:
+        # Side-by-side layout
         new_width = w1 + w2
         new_height = max(h1, h2)
         new_page = merged.new_page(width=new_width, height=new_height)
@@ -73,6 +95,7 @@ for i in range(page_count):
         new_page.show_pdf_page(fitz.Rect(w1, 0, new_width, h2), patched, i)
         new_page.draw_line(p1=(w1, 0), p2=(w1, new_height), color=(0.6, 0.6, 0.6), width=1.5)
     else:
+        # Top-bottom layout
         new_width = max(w1, w2)
         new_height = h1 + h2
         new_page = merged.new_page(width=new_width, height=new_height)
@@ -83,9 +106,15 @@ for i in range(page_count):
 merged.save(merged_path)
 print(f"🎉 Merged PDF created: {merged_path}")
 
+# 🧹 Cleanup
 try:
     Path(pix_path).unlink()
-    translated_path.unlink()
-    print("🗑 Cleaned up temporary files.")
+    print("🗑 Deleted temporary patch.png")
 except Exception as e:
-    print("⚠️ Cleanup error:", e)
+    print(f"⚠️ Could not delete patch.png: {e}")
+
+try:
+    translated_path.unlink()
+    print(f"🗑 Deleted temporary translated PDF: {translated_path.name}")
+except Exception as e:
+    print(f"⚠️ Could not delete {translated_path.name}: {e}")
