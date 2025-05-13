@@ -58,7 +58,7 @@ const AnimatedBackground: React.FC = () => {
       });
       
       // Connect particles with lines
-      connectParticles(particles, ctx, canvas.width, canvas.height);
+      connectParticles(particles, ctx);
       
       requestAnimationFrame(animate);
     };
@@ -90,8 +90,6 @@ interface Particle {
 function connectParticles(
   particles: Particle[],
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number
 ) {
   const maxDistance = 150;
   
