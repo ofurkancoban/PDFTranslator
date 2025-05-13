@@ -51,7 +51,7 @@ try:
     print("🧼 Removing watermark text...")
     for page in doc:
         for block in page.get_text("blocks"):
-            if "onlinedoctranslator.com" in block[4].lower():
+            if DOM.lower() in block[4].lower():
                 rect = fitz.Rect(block[:4])
                 page.add_redact_annot(rect, fill=(1, 1, 1))
         page.apply_redactions()

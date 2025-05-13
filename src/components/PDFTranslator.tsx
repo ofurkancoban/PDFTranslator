@@ -1,19 +1,31 @@
 import { useState } from 'react';
 import { Upload, Languages, Download, Globe } from 'lucide-react';
 
+type TranslationStep = 'upload' | 'detect' | 'translate' | 'process' | 'complete';
+
 export default function PDFTranslator() {
   const [file, setFile] = useState<File | null>(null);
   const [targetLanguage, setTargetLanguage] = useState('');
   const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle');
+  const [currentStep, setCurrentStep] = useState<TranslationStep>('upload');
   const [error, setError] = useState<string | null>(null);
   const [translatedFile, setTranslatedFile] = useState<string | null>(null);
   const [mergedFile, setMergedFile] = useState<string | null>(null);
   const [downloadLinks, setDownloadLinks] = useState<string[]>([]);
 
+  const steps: { id: TranslationStep; label: string }[] = [
+    { id: 'upload', label: 'Upload' },
+    { id: 'detect', label: 'Detect Language' },
+    { id: 'translate', label: 'Translate' },
+    { id: 'process', label: 'Process PDF' },
+    { id: 'complete', label: 'Complete' },
+  ];
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setStatus('uploading');
+      setCurrentStep('upload');
       // Simulate upload process
       setTimeout(() => {
         setStatus('idle');
@@ -34,31 +46,153 @@ export default function PDFTranslator() {
     setMergedFile(null);
     setDownloadLinks([]);
 
-    const formData = new FormData();
-    formData.append('pdf', file);
-    formData.append('targetLanguage', targetLanguage);
-
     try {
+      // Upload step
+      console.log('📄 File uploaded:', file.name);
+      console.log('🎯 Target language:', targetLanguage);
+      setCurrentStep('upload');
+
+      // Simulate upload delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Create form data with proper headers
+      const formData = new FormData();
+      formData.append('pdf', file);
+      formData.append('targetLanguage', targetLanguage);
+      formData.append('sourceLanguage', 'auto'); // Add source language detection
+
       const response = await fetch('http://localhost:3000/api/translate', {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Translation failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Translation failed with status: ${response.status}`);
       }
 
-      const data = await response.json();
-      if (data.success) {
-        setTranslatedFile(data.files.single);
-        setMergedFile(data.files.merged);
+      // Stream the response and process console outputs
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response stream available');
+
+      let buffer = '';
+      let hasCompleted = false;
+      let lastStep = 'upload';
+
+      console.log('🔄 Starting to process server response...');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          console.log('✅ Response stream completed');
+          break;
+        }
+
+        // Convert the chunk to text and add to buffer
+        const chunk = new TextDecoder().decode(value);
+        console.log('📥 Received chunk:', chunk);
+        buffer += chunk;
+        
+        // Process complete lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
+          console.log('📝 Processing line:', trimmedLine);
+
+          // Ensure steps progress in order
+          if (trimmedLine.includes('Detecting source language') && lastStep === 'upload') {
+            console.log('🔍 Step 1/4: Detecting source language...');
+            setCurrentStep('detect');
+            lastStep = 'detect';
+          } else if (trimmedLine.includes('Starting translation') && lastStep === 'detect') {
+            console.log('🔄 Step 2/4: Starting translation process...');
+            setCurrentStep('translate');
+            lastStep = 'translate';
+          } else if (trimmedLine.includes('Processing PDF') && lastStep === 'translate') {
+            console.log('⚙️ Step 3/4: Processing PDF...');
+            setCurrentStep('process');
+            lastStep = 'process';
+          } else if (trimmedLine.includes('Translation completed') && lastStep === 'process') {
+            console.log('✅ Step 4/4: Translation completed successfully!');
+            setCurrentStep('complete');
+            lastStep = 'complete';
+            hasCompleted = true;
+          }
+
+          // Try to parse JSON data if present
+          try {
+            const jsonData = JSON.parse(trimmedLine);
+            if (jsonData.success && jsonData.files) {
+              console.log('📦 Received file data:', jsonData);
+              setTranslatedFile(jsonData.files.single);
+              setMergedFile(jsonData.files.merged);
+              setStatus('completed');
+              console.log('📦 Files ready for download:');
+              console.log('   - Translated PDF:', jsonData.files.single);
+              console.log('   - Merged PDF:', jsonData.files.merged);
+              if (!hasCompleted) {
+                setCurrentStep('complete');
+                hasCompleted = true;
+              }
+            }
+          } catch (e) {
+            // Not a JSON line, continue
+          }
+        }
+      }
+
+      // Process any remaining data in buffer
+      if (buffer.trim()) {
+        console.log('📝 Processing final buffer:', buffer.trim());
+        const trimmedLine = buffer.trim();
+
+        // Ensure steps progress in order
+        if (trimmedLine.includes('Detecting source language') && lastStep === 'upload') {
+          setCurrentStep('detect');
+          lastStep = 'detect';
+        } else if (trimmedLine.includes('Starting translation') && lastStep === 'detect') {
+          setCurrentStep('translate');
+          lastStep = 'translate';
+        } else if (trimmedLine.includes('Processing PDF') && lastStep === 'translate') {
+          setCurrentStep('process');
+          lastStep = 'process';
+        } else if (trimmedLine.includes('Translation completed') && lastStep === 'process') {
+          setCurrentStep('complete');
+          lastStep = 'complete';
+          hasCompleted = true;
+        }
+
+        try {
+          const jsonData = JSON.parse(trimmedLine);
+          if (jsonData.success && jsonData.files) {
+            console.log('📦 Received final file data:', jsonData);
+            setTranslatedFile(jsonData.files.single);
+            setMergedFile(jsonData.files.merged);
+            setStatus('completed');
+            if (!hasCompleted) {
+              setCurrentStep('complete');
+              hasCompleted = true;
+            }
+          }
+        } catch (e) {
+          // Not a JSON line, continue
+        }
+      }
+
+      // If we received files but didn't get completion message, force complete
+      if (translatedFile && mergedFile && !hasCompleted) {
+        setCurrentStep('complete');
         setStatus('completed');
-      } else {
-        throw new Error('Invalid response format');
       }
     } catch (err) {
-      console.error('Translation error:', err);
+      console.error('❌ Translation error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred during translation');
       setStatus('error');
     }
@@ -106,6 +240,57 @@ export default function PDFTranslator() {
           <Languages className="text-green-400 h-8 w-8" />
           <h1 className="text-3xl font-bold text-white">PDF Translator</h1>
         </div>
+        
+        {status === 'processing' && (
+          <div className="mb-8">
+            <div className="flex justify-between mb-2">
+              {steps.map((step) => (
+                <div
+                  key={step.id}
+                  className={`flex flex-col items-center ${
+                    steps.findIndex((s) => s.id === currentStep) >= steps.findIndex((s) => s.id === step.id)
+                      ? 'text-green-400'
+                      : 'text-green-400/40'
+                  }`}
+                >
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${
+                      steps.findIndex((s) => s.id === currentStep) >= steps.findIndex((s) => s.id === step.id)
+                        ? 'bg-green-500'
+                        : 'bg-green-500/40'
+                    }`}
+                  >
+                    {steps.findIndex((s) => s.id === currentStep) > steps.findIndex((s) => s.id === step.id) ? (
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <span className="text-white">
+                        {steps.findIndex((s) => s.id === step.id) + 1}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-sm font-medium">{step.label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="relative h-2 bg-green-900/50 rounded-full overflow-hidden">
+              <div
+                className="absolute top-0 left-0 h-full bg-green-500 transition-all duration-500 ease-in-out"
+                style={{
+                  width: `${((steps.findIndex((s) => s.id === currentStep) + 1) / steps.length) * 100}%`,
+                }}
+              />
+            </div>
+            <div className="mt-2 text-sm text-green-400/80 text-center">
+              {currentStep === 'upload' && 'File uploaded successfully'}
+              {currentStep === 'detect' && 'Verifying reCAPTCHA...'}
+              {currentStep === 'translate' && 'Translation in progress...'}
+              {currentStep === 'process' && 'Processing PDF with Python...'}
+              {currentStep === 'complete' && 'All processes completed!'}
+            </div>
+          </div>
+        )}
         
         <div className="grid gap-8">
           <div className="space-y-1">
