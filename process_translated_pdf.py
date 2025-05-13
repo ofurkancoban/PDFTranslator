@@ -4,113 +4,110 @@ from pathlib import Path
 import re
 import os
 
-if len(sys.argv) < 5:
-    print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang clean_filename")
+if len(sys.argv) < 4:
+    print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang")
     sys.exit(1)
 
-original_path = Path(sys.argv[1])
-translated_path = Path(sys.argv[2])
-to_lang = sys.argv[3]
-clean_filename = sys.argv[4]  # Get the clean filename from Node.js
-
-# Extract language codes from filename (e.g., "filename.en.de" -> "en" and "de")
-lang_codes = translated_path.stem.split('.')[-2:]
-if len(lang_codes) == 2:
-    source_lang, target_lang = lang_codes
-else:
-    print("⚠️ Could not detect source language from filename. Using 'auto'.")
-    source_lang = 'auto'
-    target_lang = to_lang
-
-# Create output filenames with clean names
-single_output = f"{clean_filename}_{source_lang}.{target_lang}_single.pdf"
-merged_output = f"{clean_filename}_{source_lang}.{target_lang}_merged.pdf"
-
-# Output paths
-patched_filename = single_output
-patched_path = translated_path.parent / patched_filename
-
-merged_filename = merged_output
-merged_path = translated_path.parent / merged_filename
-
-print(f"📝 Generated filenames:")
-print(f"  - Single: {patched_filename}")
-print(f"  - Merged: {merged_filename}")
-
-# ✅ Validate PDF
 try:
+    original_path = Path(sys.argv[1])
+    translated_path = Path(sys.argv[2])
+    to_lang = sys.argv[3]
+
+    if not original_path.exists():
+        raise FileNotFoundError(f"Original file not found: {original_path}")
+    if not translated_path.exists():
+        raise FileNotFoundError(f"Translated file not found: {translated_path}")
+
+    # ✅ Dosya adı analiz (ör: abc_tr.it.pdf)
+    translated_name = translated_path.name
+    lang_match = re.search(r'^(.+)_([a-z]{2})\.([a-z]{2})\.pdf$', translated_name)
+
+    if lang_match:
+        original_stem = lang_match.group(1)
+        from_lang = lang_match.group(2)
+        target_lang = lang_match.group(3)
+    else:
+        original_stem = original_path.stem
+        from_lang = "auto"
+        target_lang = to_lang
+        print("⚠️ Could not detect language codes from translated filename.")
+
+    # ✅ Doğru çıktı adları
+    single_output = f"{original_stem}_{from_lang}.{target_lang}_single.pdf"
+    merged_output = f"{original_stem}_{from_lang}.{target_lang}_merged.pdf"
+    patched_path = translated_path.parent / single_output
+    merged_path = translated_path.parent / merged_output
+
+    print(f"Single: {single_output}")
+    print(f"Merged: {merged_output}")
+
+    # ✅ Translated PDF aç ve doğrula
     doc = fitz.open(translated_path)
     if not doc.is_pdf or doc.page_count == 0:
         raise ValueError("Invalid or empty PDF.")
+    print(f"✅ PDF is valid with {doc.page_count} pages")
+
+    # 🧼 Watermark temizle
+    print("🧼 Removing watermark text...")
+    for page in doc:
+        for block in page.get_text("blocks"):
+            if "onlinedoctranslator.com" in block[4].lower():
+                rect = fitz.Rect(block[:4])
+                page.add_redact_annot(rect, fill=(1, 1, 1))
+        page.apply_redactions()
+
+    # 🖼 Başlık görüntüsünü al ve yerleştir
+    print("🖼 Extracting and overlaying top header from original...")
+    orig = fitz.open(original_path)
+    width, height = orig[0].rect.width, orig[0].rect.height
+    clip_rect = fitz.Rect(0, 0, width, 20)
+    pix = orig[0].get_pixmap(clip=clip_rect)
+    pix_path = "patch.png"
+    pix.save(pix_path)
+
+    img_rect = fitz.Rect(0, 0, width, 20)
+    doc[0].insert_image(img_rect, filename=pix_path)
+    doc.save(patched_path)
+    print(f"✅ Watermark removed and header added → {patched_path.name}")
+
+    # 📘 Orijinal + çeviri PDF'yi birleştir
+    print("📘 Merging original and translated PDFs...")
+    patched = fitz.open(patched_path)
+    merged = fitz.open()
+    page_count = min(len(orig), len(patched))
+    is_portrait = orig[0].rect.width < orig[0].rect.height
+
+    for i in range(page_count):
+        w1, h1 = orig[i].rect.width, orig[i].rect.height
+        w2, h2 = patched[i].rect.width, patched[i].rect.height
+
+        if is_portrait:
+            new_page = merged.new_page(width=w1 + w2, height=max(h1, h2))
+            new_page.show_pdf_page(fitz.Rect(0, 0, w1, h1), orig, i)
+            new_page.show_pdf_page(fitz.Rect(w1, 0, w1 + w2, h2), patched, i)
+            new_page.draw_line(p1=(w1, 0), p2=(w1, max(h1, h2)), color=(0.6, 0.6, 0.6), width=1.5)
+        else:
+            new_page = merged.new_page(width=max(w1, w2), height=h1 + h2)
+            new_page.show_pdf_page(fitz.Rect(0, 0, w1, h1), orig, i)
+            new_page.show_pdf_page(fitz.Rect(0, h1, w2, h1 + h2), patched, i)
+            new_page.draw_line(p1=(0, h1), p2=(max(w1, w2), h1), color=(0.6, 0.6, 0.6), width=1.5)
+
+    merged.save(merged_path)
+    print(f"🎉 Merged PDF created: {merged_path.name}")
+
+    # 🧹 Geçici dosyaları sil
+    try:
+        Path(pix_path).unlink()
+        print("🗑 Deleted temporary patch.png")
+    except Exception as e:
+        print(f"⚠️ Could not delete patch.png: {str(e)}")
+
+    try:
+        translated_path.unlink()
+        print(f"🗑 Deleted temporary translated PDF: {translated_path.name}")
+    except Exception as e:
+        print(f"⚠️ Could not delete {translated_path.name}: {str(e)}")
+
 except Exception as e:
-    print(f"❌ Invalid translated PDF file: {translated_path}")
-    print("Error:", e)
+    print(f"❌ Fatal error: {str(e)}")
     sys.exit(1)
-
-# 🧼 Remove watermark
-print("🧼 Removing watermark text...")
-for page in doc:
-    blocks = page.get_text("blocks")
-    for block in blocks:
-        if "onlinedoctranslator.com" in block[4].lower():
-            rect = fitz.Rect(block[:4])
-            page.add_redact_annot(rect, fill=(1, 1, 1))
-    page.apply_redactions()
-
-# 🖼 Overlay header from original
-print("🖼 Extracting and overlaying top header from original...")
-orig = fitz.open(original_path)
-width, height = orig[0].rect.width, orig[0].rect.height
-clip_rect = fitz.Rect(0, 0, width, 20)
-pix = orig[0].get_pixmap(clip=clip_rect)
-pix_path = "patch.png"
-pix.save(pix_path)
-
-img_rect = fitz.Rect(0, 0, width, 20)
-doc[0].insert_image(img_rect, filename=pix_path)
-doc.save(patched_path)
-print(f"✅ Watermark removed and header added → {patched_path}")
-
-# 📘 Merge both PDFs
-print("📘 Merging original and translated PDFs...")
-patched = fitz.open(patched_path)
-merged = fitz.open()
-page_count = min(len(orig), len(patched))
-is_portrait = orig[0].rect.width < orig[0].rect.height
-
-for i in range(page_count):
-    w1, h1 = orig[i].rect.width, orig[i].rect.height
-    w2, h2 = patched[i].rect.width, patched[i].rect.height
-
-    if is_portrait:
-        # Side-by-side layout
-        new_width = w1 + w2
-        new_height = max(h1, h2)
-        new_page = merged.new_page(width=new_width, height=new_height)
-        new_page.show_pdf_page(fitz.Rect(0, 0, w1, h1), orig, i)
-        new_page.show_pdf_page(fitz.Rect(w1, 0, new_width, h2), patched, i)
-        new_page.draw_line(p1=(w1, 0), p2=(w1, new_height), color=(0.6, 0.6, 0.6), width=1.5)
-    else:
-        # Top-bottom layout
-        new_width = max(w1, w2)
-        new_height = h1 + h2
-        new_page = merged.new_page(width=new_width, height=new_height)
-        new_page.show_pdf_page(fitz.Rect(0, 0, w1, h1), orig, i)
-        new_page.show_pdf_page(fitz.Rect(0, h1, w2, h1 + h2), patched, i)
-        new_page.draw_line(p1=(0, h1), p2=(new_width, h1), color=(0.6, 0.6, 0.6), width=1.5)
-
-merged.save(merged_path)
-print(f"🎉 Merged PDF created: {merged_path}")
-
-# 🧹 Cleanup
-try:
-    Path(pix_path).unlink()
-    print("🗑 Deleted temporary patch.png")
-except Exception as e:
-    print(f"⚠️ Could not delete patch.png: {e}")
-
-try:
-    translated_path.unlink()
-    print(f"🗑 Deleted temporary translated PDF: {translated_path.name}")
-except Exception as e:
-    print(f"⚠️ Could not delete {translated_path.name}: {e}")

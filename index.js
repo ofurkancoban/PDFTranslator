@@ -44,9 +44,8 @@ app.use(express.json());
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
+    if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    cb(null, UPLOAD_DIR);
   },
   filename: function (req, file, cb) {
     cb(null, file.originalname);
@@ -108,7 +107,16 @@ async function runTranslation(filePath, targetLanguage) {
   try {
     const page = await browser.newPage();
     await page.goto(TARGET_SITE_URL, { waitUntil: 'networkidle2', timeout: 0 });
-    await page.select('#to', targetLanguage);
+
+    await page.waitForSelector('select[name="to"]', { timeout: 10000 });
+
+    await page.evaluate((lang) => {
+      const select = document.querySelector('select[name="to"]');
+      if (select) {
+        select.value = lang;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, targetLanguage);
 
     const fileInput = await page.$('input[type="file"]');
     await fileInput.uploadFile(path.resolve(filePath));
@@ -159,55 +167,60 @@ async function runTranslation(filePath, targetLanguage) {
       ? downloadHref
       : `${new URL(TARGET_SITE_URL).origin}${downloadHref}`;
 
-    if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
-    
-    // Get original filename without extension and clean it
     const originalFilename = path.basename(filePath, '.pdf');
-    // Remove any language codes, parentheses and clean the filename
-    const cleanFilename = originalFilename
-      .split('.')[0]  // Remove language codes
-      .replace(/\([^)]*\)/g, '')  // Remove anything in parentheses
-      .replace(/\s+/g, '_')  // Replace spaces with underscores
-      .replace(/[^a-zA-Z0-9_-]/g, '')  // Remove special characters
-      .replace(/_+/g, '_')  // Replace multiple underscores with single underscore
-      .replace(/^_|_$/g, '')  // Remove leading and trailing underscores
-      .replace(/(\d+)_(\d+)/g, '$1_$2');  // Keep numbers separated by underscore
-    
-    // Extract source language from the downloaded file name
     const downloadFileName = path.basename(downloadHref);
-    const sourceLang = downloadFileName.split('.')[1] || 'en'; // Get source language from downloaded file name
-    
-    // Use clean filename with correct format
-    const fileName = `${cleanFilename}_${sourceLang}.${targetLanguage}.pdf`;
+    const langMatch = downloadFileName.match(/\.([a-z]{2})\.([a-z]{2})\.pdf$/);
+
+    if (!langMatch) throw new Error('⚠️ Language codes could not be parsed from download filename.');
+
+    const sourceLang = langMatch[1];
+    const targetLang = langMatch[2];
+
+    const fileName = `${originalFilename}_${sourceLang}.${targetLang}.pdf`;
     const destination = path.join(DOWNLOAD_DIR, fileName);
 
     await downloadWithPuppeteerFetch(page, fullUrl, destination);
     console.log('✅ File successfully downloaded:', destination);
 
-    // Run Python script
     console.log('⚙️ Launching post-processing script...');
     const pythonPath = path.resolve('./myenv/bin/python');
     const py = spawn(pythonPath, [
       'process_translated_pdf.py',
       filePath,
       destination,
-      targetLanguage,
-      cleanFilename  // Pass the clean filename to Python script
+      targetLang
     ]);
 
     return new Promise((resolve, reject) => {
-      py.stdout.on('data', data => console.log('[PYTHON]', data.toString()));
-      py.stderr.on('data', data => console.error('[PYTHON ERROR]', data.toString()));
+      let singleFile = null;
+      let mergedFile = null;
+      let errorOutput = '';
+
+      py.stdout.on('data', data => {
+        const output = data.toString();
+        console.log('[PYTHON]', output);
+
+        const singleMatch = output.match(/Single: ([^\n]+)/);
+        const mergedMatch = output.match(/Merged: ([^\n]+)/);
+
+        if (singleMatch) singleFile = singleMatch[1].trim();
+        if (mergedMatch) mergedFile = mergedMatch[1].trim();
+      });
+
+      py.stderr.on('data', data => {
+        const error = data.toString();
+        console.error('[PYTHON ERROR]', error);
+        errorOutput += error;
+      });
+
       py.on('close', code => {
-        if (code === 0) {
-          const singleFile = `${cleanFilename}_${sourceLang}.${targetLanguage}_single.pdf`;
-          const mergedFile = `${cleanFilename}_${sourceLang}.${targetLanguage}_merged.pdf`;
+        if (code === 0 && singleFile && mergedFile) {
           resolve({
             single: `translated/${singleFile}`,
             merged: `translated/${mergedFile}`
           });
         } else {
-          reject(new Error('Python script failed'));
+          reject(new Error(`Python script failed: ${errorOutput}`));
         }
       });
     });
@@ -223,11 +236,11 @@ app.post('/api/translate', upload.single('pdf'), async (req, res) => {
 
     if (!req.file) return res.status(400).json({ error: 'No PDF file uploaded' });
 
-    const baseFilename = await runTranslation(filePath, targetLanguage);
+    const result = await runTranslation(filePath, targetLanguage);
 
     res.json({
       success: true,
-      files: baseFilename
+      files: result
     });
 
     try { fs.unlinkSync(filePath); } catch {}
@@ -241,12 +254,31 @@ app.get('/api/download', async (req, res) => {
   const filePath = req.query.file;
   if (!filePath) return res.status(400).json({ error: 'File path is required' });
 
-  const absolutePath = path.join(__dirname, filePath);
-  if (!fs.existsSync(absolutePath)) return res.status(404).json({ error: 'File not found' });
+  const decodedPath = decodeURIComponent(filePath);
+  const absolutePath = path.join(__dirname, decodedPath);
 
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename=${path.basename(filePath)}`);
-  fs.createReadStream(absolutePath).pipe(res);
+  if (!fs.existsSync(absolutePath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  try {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=${path.basename(decodedPath)}`);
+    const fileStream = fs.createReadStream(absolutePath);
+
+    fileStream.on('error', (error) => {
+      console.error('Error reading file:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Error reading file' });
+      }
+    });
+
+    fileStream.pipe(res);
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
 });
 
 app.listen(port, () => {
