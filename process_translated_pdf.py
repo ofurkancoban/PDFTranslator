@@ -2,7 +2,11 @@ import sys
 import fitz  # PyMuPDF
 from pathlib import Path
 import re
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
+DOM = os.getenv("DOM")
 
 if len(sys.argv) < 4:
     print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang")
