@@ -1,7 +1,6 @@
 // ✅ index.js — Streaming destekli, progress bar ile uyumlu tam çalışan backend
 
 import puppeteer from 'puppeteer';
-import { executablePath } from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch';
@@ -55,20 +54,6 @@ const {
   API_KEY
 } = process.env;
 
-function getChromiumPath() {
-  const candidates = [
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome-stable',
-    '/bin/chromium-browser',
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return undefined;
-}
-
-
 async function solveCaptcha(sitekey, pageUrl) {
   console.log('🔍 Starting CAPTCHA solving process...');
  
@@ -109,14 +94,11 @@ async function downloadWithPuppeteerFetch(page, url, destinationPath) {
 
 async function runTranslationWithStream(filePath, targetLanguage, res) {
   const browser = await puppeteer.launch({
-    headless: 'new',
-    executablePath: getChromiumPath(),
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-    ],
-    defaultViewport: null,
-  });
+  headless: 'new',
+  executablePath: chromiumPath, // 🔥 sistem chromium burada tanımlı
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  defaultViewport: null
+});
   
   try {
     const page = await browser.newPage();
@@ -474,34 +456,6 @@ app.get('/api/check-file', (req, res) => {
   }
 });
 
-app.get('/api/hello', (req, res) => {
-  res.json({ message: 'Backend is working!' });
-});
-
-app.get('/api/test-chrome', async (req, res) => {
-  try {
-    const chromePath = getChromiumPath();
-    console.log('Chromium path:', chromePath);
-    const browser = await puppeteer.launch({
-      headless: 'new',
-      executablePath: chromePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      defaultViewport: null,
-    });
-    await browser.close();
-    res.send('Chromium çalışıyor! Path: ' + chromePath);
-  } catch (e) {
-    res.status(500).send('Chromium açılmıyor: ' + e.message);
-  }
-});
-
-const DIST_PATH = path.join(__dirname, 'dist');
-app.use(express.static(DIST_PATH));
-app.get('*', (req, res) => {
-  res.sendFile(path.join(DIST_PATH, 'index.html'));
-});
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });
-
-//
