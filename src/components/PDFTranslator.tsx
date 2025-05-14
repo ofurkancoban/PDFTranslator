@@ -292,8 +292,8 @@ export default function PDFTranslator() {
   };
 
   return (
-    <div className="w-full max-w-4xl backdrop-blur-lg bg-green-900/30 rounded-2xl overflow-hidden shadow-2xl border border-green-700/20">
-      <div className="p-6 sm:p-8">
+    <div className="w-full max-w-4xl backdrop-blur-lg bg-green-900/30 rounded-2xl overflow-hidden shadow-2xl border border-green-700/20 mx-4 sm:mx-auto">
+      <div className="p-4 sm:p-6 lg:p-8">
         <input
           ref={fileInputRef}
           type="file"
@@ -303,41 +303,46 @@ export default function PDFTranslator() {
           onChange={handleFileChange}
           disabled={status === 'processing'}
         />
-        <div className="flex items-center gap-3 mb-6">
-          <Languages className="text-green-400 h-8 w-8" />
-          <h1 className="text-3xl font-bold text-white">PDF Translator</h1>
+        
+        {/* Header - Mobile optimized */}
+        <div className="flex items-center gap-3 mb-4 sm:mb-6">
+          <Languages className="text-green-400 h-6 w-6 sm:h-8 sm:w-8" />
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">PDF Translator</h1>
         </div>
         
+        {/* Progress Steps - Mobile responsive */}
         {status === 'processing' && (
-          <div className="mb-8">
-            <div className="flex justify-between mb-2">
+          <div className="mb-6 sm:mb-8">
+            <div className="flex justify-between mb-2 overflow-x-auto pb-2">
               {steps.map((step) => (
                 <div
                   key={step.id}
-                  className={`flex flex-col items-center ${
+                  className={`flex flex-col items-center min-w-0 flex-1 ${
                     steps.findIndex((s) => s.id === currentStep) >= steps.findIndex((s) => s.id === step.id)
                       ? 'text-green-400'
                       : 'text-green-400/40'
                   }`}
                 >
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${
+                    className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center mb-1 sm:mb-2 ${
                       steps.findIndex((s) => s.id === currentStep) >= steps.findIndex((s) => s.id === step.id)
                         ? 'bg-green-500'
                         : 'bg-green-500/40'
                     }`}
                   >
                     {steps.findIndex((s) => s.id === currentStep) > steps.findIndex((s) => s.id === step.id) ? (
-                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-3 h-3 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     ) : (
-                      <span className="text-white">
+                      <span className="text-white text-xs sm:text-sm">
                         {steps.findIndex((s) => s.id === step.id) + 1}
                       </span>
                     )}
                   </div>
-                  <span className="text-sm font-medium">{step.label}</span>
+                  <span className="text-xs sm:text-sm font-medium text-center truncate w-full px-1">
+                    {step.label}
+                  </span>
                 </div>
               ))}
             </div>
@@ -349,7 +354,7 @@ export default function PDFTranslator() {
                 }}
               />
             </div>
-            <div className="mt-2 text-sm text-green-400/80 text-center">
+            <div className="mt-2 text-xs sm:text-sm text-green-400/80 text-center px-2">
               {currentStep === 'upload' && `Processing file ${currentFileIndex + 1} of ${files.length}...`}
               {currentStep === 'detect' && `Detecting language for file ${currentFileIndex + 1}...`}
               {currentStep === 'translate' && `Translating file ${currentFileIndex + 1}...`}
@@ -359,93 +364,100 @@ export default function PDFTranslator() {
           </div>
         )}
         
-        <div className="grid gap-8">
-          <div className="space-y-1">
+        <div className="grid gap-6 sm:gap-8">
+          {/* Upload Section - Mobile optimized */}
+          <div className="space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2 mb-2">
-              <Download className="h-5 w-5 text-green-400" />
-              <h2 className="text-xl font-semibold text-white">Upload PDFs</h2>
+              <Download className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
+              <h2 className="text-lg sm:text-xl font-semibold text-white">Upload PDFs</h2>
             </div>
+            
+            {/* Drag Drop Area - Mobile responsive */}
             <div 
               onClick={handleDragDropClick}
-              className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-green-700/20 border-dashed rounded-lg hover:border-green-600/40 transition-colors cursor-pointer"
+              className="flex justify-center px-4 py-8 sm:px-6 sm:py-12 border-2 border-green-700/20 border-dashed rounded-lg hover:border-green-600/40 transition-colors cursor-pointer"
             >
-              <div className="space-y-1 text-center pointer-events-none">
-                <Upload className="mx-auto h-12 w-12 text-green-400/60" />
+              <div className="space-y-2 text-center pointer-events-none">
+                <Upload className="mx-auto h-8 w-8 sm:h-12 sm:w-12 text-green-400/60" />
                 <div className="flex text-sm text-white/80">
                   <span className="font-medium text-green-400 hover:text-green-300">
                     Upload files
                   </span>
                 </div>
-                <p className="text-xs text-green-400/60">
+                <p className="text-xs text-green-400/60 px-4">
                   Multiple PDFs up to 10MB each
                   <br />
-                  <span className="text-green-400/40">Click anywhere to select files</span>
+                  <span className="text-green-400/40">Tap anywhere to select files</span>
                 </p>
               </div>
             </div>
             
+            {/* File List - Mobile responsive */}
             {files.length > 0 && (
               <div className="mt-4 space-y-2">
                 <p className="text-sm font-medium text-green-400">Selected files:</p>
-                {files.map((fileObj, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-green-900/20 rounded-lg border border-green-700/20">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${
-                        fileObj.status === 'completed' ? 'bg-green-500' :
-                        fileObj.status === 'processing' ? 'bg-yellow-500' :
-                        fileObj.status === 'retrying' ? 'bg-orange-500' :
-                        fileObj.status === 'error' ? 'bg-red-500' :
-                        'bg-gray-500'
-                      }`} />
-                      <div>
-                        <span className="text-sm text-white">{fileObj.file.name}</span>
-                        {fileObj.error && (
-                          <p className="text-xs text-red-400 mt-1">{fileObj.error}</p>
+                <div className="space-y-2 max-h-48 sm:max-h-64 overflow-y-auto">
+                  {files.map((fileObj, index) => (
+                    <div key={index} className="flex items-start sm:items-center justify-between p-3 bg-green-900/20 rounded-lg border border-green-700/20">
+                      <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-3 h-3 rounded-full flex-shrink-0 mt-1 sm:mt-0 ${
+                          fileObj.status === 'completed' ? 'bg-green-500' :
+                          fileObj.status === 'processing' ? 'bg-yellow-500' :
+                          fileObj.status === 'retrying' ? 'bg-orange-500' :
+                          fileObj.status === 'error' ? 'bg-red-500' :
+                          'bg-gray-500'
+                        }`} />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-sm text-white break-words">{fileObj.file.name}</span>
+                          {fileObj.error && (
+                            <p className="text-xs text-red-400 mt-1 break-words">{fileObj.error}</p>
+                          )}
+                          {fileObj.retryCount && fileObj.retryCount > 0 && (
+                            <p className="text-xs text-orange-400 mt-1">Retry attempt {fileObj.retryCount}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2 ml-2">
+                        {fileObj.status === 'error' && (fileObj.retryCount || 0) < maxRetries && (
+                          <button
+                            onClick={() => retryFile(index)}
+                            className="text-orange-400 hover:text-orange-300 text-xs sm:text-sm px-2 py-1 border border-orange-400/30 rounded whitespace-nowrap"
+                            disabled={status === 'processing'}
+                          >
+                            Retry
+                          </button>
                         )}
-                        {fileObj.retryCount && fileObj.retryCount > 0 && (
-                          <p className="text-xs text-orange-400 mt-1">Retry attempt {fileObj.retryCount}</p>
+                        {status !== 'processing' && (
+                          <button
+                            onClick={() => removeFile(index)}
+                            className="text-red-400 hover:text-red-300 text-xs sm:text-sm whitespace-nowrap"
+                          >
+                            Remove
+                          </button>
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      {fileObj.status === 'error' && (fileObj.retryCount || 0) < maxRetries && (
-                        <button
-                          onClick={() => retryFile(index)}
-                          className="text-orange-400 hover:text-orange-300 text-sm px-2 py-1 border border-orange-400/30 rounded"
-                          disabled={status === 'processing'}
-                        >
-                          Retry
-                        </button>
-                      )}
-                      {status !== 'processing' && (
-                        <button
-                          onClick={() => removeFile(index)}
-                          className="text-red-400 hover:text-red-300 text-sm"
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
           
-          <div className="space-y-1">
+          {/* Language Selection - Mobile responsive */}
+          <div className="space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2 mb-2">
-              <Globe className="h-5 w-5 text-green-400" />
-              <h2 className="text-xl font-semibold text-white">Select Target Language</h2>
+              <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
+              <h2 className="text-lg sm:text-xl font-semibold text-white">Select Target Language</h2>
             </div>
-            <div className="mt-1 relative rounded-lg">
+            <div className="relative rounded-lg">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Languages className="h-5 w-5 text-green-400/60" />
+                <Languages className="h-4 w-4 sm:h-5 sm:w-5 text-green-400/60" />
               </div>
               <select
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value)}
                 disabled={!files.length || status === 'processing' || status === 'completed'}
-                className="block w-full pl-10 pr-3 py-2 bg-green-900/30 border border-green-700/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                className="block w-full pl-10 pr-3 py-3 sm:py-2 bg-green-900/30 border border-green-700/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               >
                 <option value="">Select a language</option>
                 {languages.map((lang) => (
@@ -457,39 +469,46 @@ export default function PDFTranslator() {
             </div>
           </div>
           
+          {/* Error Message */}
           {error && (
-            <div className="py-2 px-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-200">
+            <div className="py-3 px-4 bg-red-500/20 border border-red-500/30 rounded-lg text-red-200 text-sm">
               {error}
             </div>
           )}
           
+          {/* Processing Indicator */}
           {status === 'processing' && (
             <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-400"></div>
-              <span className="ml-3 text-green-400">Processing translations...</span>
+              <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-green-400"></div>
+              <span className="ml-3 text-green-400 text-sm sm:text-base">Processing translations...</span>
             </div>
           )}
           
+          {/* Results Section - Mobile responsive */}
           {allFilesCompleted && hasCompletedFiles ? (
             <div className="space-y-4">
               <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4 text-green-200">
-                Translation completed for {files.filter(f => f.status === 'completed').length} of {files.length} files
+                <p className="text-sm sm:text-base">
+                  Translation completed for {files.filter(f => f.status === 'completed').length} of {files.length} files
+                </p>
                 {hasErrorFiles && (
-                  <p className="text-sm mt-2 text-orange-300">
+                  <p className="text-xs sm:text-sm mt-2 text-orange-300">
                     {files.filter(f => f.status === 'error').length} files failed. You can retry them individually.
                   </p>
                 )}
               </div>
+              
+              {/* Completed Files */}
               <div className="space-y-3">
                 {files.map((fileObj, index) => 
                   fileObj.status === 'completed' && (
                     <div key={index} className="p-4 bg-green-900/20 rounded-lg border border-green-700/20">
-                      <p className="text-sm text-green-400 mb-3">{fileObj.file.name}</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <p className="text-sm text-green-400 mb-3 break-words">{fileObj.file.name}</p>
+                      <div className="grid grid-cols-1 gap-3">
                         {fileObj.translatedPath && (
                           <button
                             onClick={() => handleDownload(fileObj.translatedPath!)}
-                            className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-medium bg-green-600 hover:bg-green-500 text-white text-sm"
+                            className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium bg-green-600 hover:bg-green-500 text-white text-sm transition-colors"
                           >
                             <Download className="h-4 w-4" />
                             Download Translated
@@ -498,7 +517,7 @@ export default function PDFTranslator() {
                         {fileObj.mergedPath && (
                           <button
                             onClick={() => handleDownload(fileObj.mergedPath!)}
-                            className="flex items-center justify-center gap-2 py-2 px-3 rounded-lg font-medium bg-green-600 hover:bg-green-500 text-white text-sm"
+                            className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-medium bg-green-600 hover:bg-green-500 text-white text-sm transition-colors"
                           >
                             <Download className="h-4 w-4" />
                             Download Merged
@@ -509,18 +528,20 @@ export default function PDFTranslator() {
                   )
                 )}
               </div>
+              
+              {/* Failed Files */}
               {hasErrorFiles && (
                 <div className="space-y-3">
                   <h3 className="text-lg font-semibold text-red-400">Failed Files</h3>
                   {files.map((fileObj, index) => 
                     fileObj.status === 'error' && (
                       <div key={index} className="p-4 bg-red-900/20 rounded-lg border border-red-700/20">
-                        <p className="text-sm text-red-400 mb-2">{fileObj.file.name}</p>
-                        <p className="text-xs text-red-300 mb-3">{fileObj.error}</p>
+                        <p className="text-sm text-red-400 mb-2 break-words">{fileObj.file.name}</p>
+                        <p className="text-xs text-red-300 mb-3 break-words">{fileObj.error}</p>
                         {(fileObj.retryCount || 0) < maxRetries && (
                           <button
                             onClick={() => retryFile(index)}
-                            className="px-3 py-1 text-sm bg-orange-600 hover:bg-orange-500 text-white rounded"
+                            className="w-full px-3 py-2 text-sm bg-orange-600 hover:bg-orange-500 text-white rounded transition-colors"
                             disabled={status === 'processing'}
                           >
                             Retry ({maxRetries - (fileObj.retryCount || 0)} attempts left)
@@ -531,6 +552,7 @@ export default function PDFTranslator() {
                   )}
                 </div>
               )}
+              
               <button
                 onClick={handleReset}
                 className="w-full py-3 px-4 rounded-lg font-medium bg-green-600 hover:bg-green-500 text-white shadow-lg hover:shadow-green-600/25 transition-all duration-300"
@@ -542,7 +564,7 @@ export default function PDFTranslator() {
             <button
               onClick={handleSubmit}
               disabled={!files.length || !targetLanguage || status === 'processing'}
-              className={`w-full py-3 px-4 rounded-lg font-medium transition-all duration-300 ${
+              className={`w-full py-3 sm:py-4 px-4 rounded-lg font-medium transition-all duration-300 text-sm sm:text-base ${
                 !files.length || !targetLanguage || status === 'processing'
                   ? 'bg-green-700/50 text-green-200/50 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-500 text-white shadow-lg hover:shadow-green-600/25'
