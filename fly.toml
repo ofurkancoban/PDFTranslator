@@ -21,7 +21,7 @@
     port = 443
   [services.http_checks]
     interval = 10000
-    timeout = 2001
+    timeout = 200
     grace_period = "5s"
     method = "get"
     path = "/"
