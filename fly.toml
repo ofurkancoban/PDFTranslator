@@ -2,6 +2,7 @@
   allowed_public_ports = [80, 443]
   auto_rollback = true
 
+
 [env]
   PORT = "3000"
 
@@ -20,7 +21,7 @@
     port = 443
   [services.http_checks]
     interval = 10000
-    timeout = 2000
+    timeout = 2001
     grace_period = "5s"
     method = "get"
     path = "/"
