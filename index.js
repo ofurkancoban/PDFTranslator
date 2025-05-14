@@ -12,6 +12,15 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
+
+let chromiumPath;
+try {
+  chromiumPath = execSync('which chromium').toString().trim();
+  console.log('✅ Chromium path:', chromiumPath);
+} catch (err) {
+  console.error('❌ Chromium not found:', err.message);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
