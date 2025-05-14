@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Upload, Languages, Download, Globe } from 'lucide-react';
 import { languages } from '../data/languages';
 
@@ -21,6 +21,7 @@ export default function PDFTranslator() {
   const [error, setError] = useState<string | null>(null);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [maxRetries] = useState(2);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const steps: { id: TranslationStep; label: string }[] = [
     { id: 'upload', label: 'Upload' },
@@ -286,9 +287,22 @@ export default function PDFTranslator() {
   const hasCompletedFiles = files.some(f => f.status === 'completed');
   const hasErrorFiles = files.some(f => f.status === 'error');
 
+  const handleDragDropClick = () => {
+    fileInputRef.current?.click();
+  };
+
   return (
     <div className="w-full max-w-4xl backdrop-blur-lg bg-green-900/30 rounded-2xl overflow-hidden shadow-2xl border border-green-700/20">
       <div className="p-6 sm:p-8">
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          accept=".pdf"
+          multiple
+          onChange={handleFileChange}
+          disabled={status === 'processing'}
+        />
         <div className="flex items-center gap-3 mb-6">
           <Languages className="text-green-400 h-8 w-8" />
           <h1 className="text-3xl font-bold text-white">PDF Translator</h1>
@@ -351,23 +365,22 @@ export default function PDFTranslator() {
               <Download className="h-5 w-5 text-green-400" />
               <h2 className="text-xl font-semibold text-white">Upload PDFs</h2>
             </div>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-green-700/20 border-dashed rounded-lg hover:border-green-600/40 transition-colors">
-              <div className="space-y-1 text-center">
+            <div 
+              onClick={handleDragDropClick}
+              className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-green-700/20 border-dashed rounded-lg hover:border-green-600/40 transition-colors cursor-pointer"
+            >
+              <div className="space-y-1 text-center pointer-events-none">
                 <Upload className="mx-auto h-12 w-12 text-green-400/60" />
                 <div className="flex text-sm text-white/80">
-                  <label className="relative cursor-pointer rounded-md font-medium text-green-400 hover:text-green-300 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-green-500">
-                    <span>Upload files</span>
-                    <input
-                      type="file"
-                      className="sr-only"
-                      accept=".pdf"
-                      multiple
-                      onChange={handleFileChange}
-                      disabled={status === 'processing'}
-                    />
-                  </label>
+                  <span className="font-medium text-green-400 hover:text-green-300">
+                    Upload files
+                  </span>
                 </div>
-                <p className="text-xs text-green-400/60">Multiple PDFs up to 10MB each</p>
+                <p className="text-xs text-green-400/60">
+                  Multiple PDFs up to 10MB each
+                  <br />
+                  <span className="text-green-400/40">Click anywhere to select files</span>
+                </p>
               </div>
             </div>
             
