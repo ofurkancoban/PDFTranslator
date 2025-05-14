@@ -6,10 +6,11 @@ type TranslationStep = 'upload' | 'detect' | 'translate' | 'process' | 'complete
 
 interface FileTranslation {
   file: File;
-  status: 'pending' | 'processing' | 'completed' | 'error';
+  status: 'pending' | 'processing' | 'completed' | 'error' | 'retrying';
   translatedPath?: string;
   mergedPath?: string;
   error?: string;
+  retryCount?: number;
 }
 
 export default function PDFTranslator() {
@@ -19,6 +20,7 @@ export default function PDFTranslator() {
   const [currentStep, setCurrentStep] = useState<TranslationStep>('upload');
   const [error, setError] = useState<string | null>(null);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [maxRetries] = useState(2);
 
   const steps: { id: TranslationStep; label: string }[] = [
     { id: 'upload', label: 'Upload' },
@@ -34,14 +36,171 @@ export default function PDFTranslator() {
         file,
         status: 'pending' as const
       }));
-      setFiles(newFiles);
+      
+      // Duplicate kontrolü yaparak yeni dosyaları mevcut dosyalara ekle
+      setFiles(prev => {
+        const existingFileNames = prev.map(f => f.file.name);
+        const uniqueNewFiles = newFiles.filter(newFile => 
+          !existingFileNames.includes(newFile.file.name)
+        );
+        return [...prev, ...uniqueNewFiles];
+      });
+      
       setStatus('idle');
       setCurrentStep('upload');
+      
+      // Input'u temizle ki aynı dosyayı tekrar seçebilsin
+      e.target.value = '';
     }
   };
 
   const removeFile = (index: number) => {
     setFiles(files.filter((_, i) => i !== index));
+  };
+
+  const retryFile = async (index: number) => {
+    setFiles(prev => prev.map((f, idx) => 
+      idx === index ? { 
+        ...f, 
+        status: 'retrying', 
+        error: undefined,
+        retryCount: (f.retryCount || 0) + 1
+      } : f
+    ));
+
+    try {
+      await processFile(index);
+    } catch (err) {
+      setFiles(prev => prev.map((f, idx) => 
+        idx === index ? { 
+          ...f, 
+          status: 'error',
+          error: err instanceof Error ? err.message : 'Translation failed'
+        } : f
+      ));
+    }
+  };
+
+  const processFile = async (index: number) => {
+    const fileObj = files[index];
+    
+    setCurrentFileIndex(index);
+    setFiles(prev => prev.map((f, idx) => 
+      idx === index ? { ...f, status: 'processing' } : f
+    ));
+
+    setCurrentStep('upload');
+    console.log(`📄 Processing file ${index + 1}/${files.length}:`, fileObj.file.name);
+
+    // Create form data
+    const formData = new FormData();
+    formData.append('pdf', fileObj.file);
+    formData.append('targetLanguage', targetLanguage);
+    formData.append('sourceLanguage', 'auto');
+
+    const response = await fetch('http://localhost:3000/api/translate', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `Translation failed with status: ${response.status}`);
+    }
+
+    // Stream processing with better error handling
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No response stream available');
+
+    let buffer = '';
+    let lastStep = 'upload';
+    let hasReceivedResult = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = new TextDecoder().decode(value);
+      buffer += chunk;
+      
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine) continue;
+
+        // Update steps
+        if (trimmedLine.includes('Detecting source language') && lastStep === 'upload') {
+          setCurrentStep('detect');
+          lastStep = 'detect';
+        } else if (trimmedLine.includes('Starting translation') && lastStep === 'detect') {
+          setCurrentStep('translate');
+          lastStep = 'translate';
+        } else if (trimmedLine.includes('Processing PDF') && lastStep === 'translate') {
+          setCurrentStep('process');
+          lastStep = 'process';
+        } else if (trimmedLine.includes('Translation completed') && lastStep === 'process') {
+          setCurrentStep('complete');
+          lastStep = 'complete';
+        }
+
+        // Parse JSON response
+        try {
+          const jsonData = JSON.parse(trimmedLine);
+          if (jsonData.success && jsonData.files) {
+            hasReceivedResult = true;
+            setFiles(prev => prev.map((f, idx) => 
+              idx === index ? { 
+                ...f, 
+                status: 'completed',
+                translatedPath: jsonData.files.single,
+                mergedPath: jsonData.files.merged
+              } : f
+            ));
+          } else if (jsonData.error) {
+            throw new Error(jsonData.error);
+          }
+        } catch (e) {
+          // If not JSON and contains error, handle it
+          if (trimmedLine.includes('Translation error:') || trimmedLine.includes('❌')) {
+            throw new Error(`Translation service error: ${trimmedLine}`);
+          }
+        }
+      }
+    }
+
+    // Process remaining buffer
+    if (buffer.trim()) {
+      try {
+        const jsonData = JSON.parse(buffer.trim());
+        if (jsonData.success && jsonData.files) {
+          hasReceivedResult = true;
+          setFiles(prev => prev.map((f, idx) => 
+            idx === index ? { 
+              ...f, 
+              status: 'completed',
+              translatedPath: jsonData.files.single,
+              mergedPath: jsonData.files.merged
+            } : f
+          ));
+        } else if (jsonData.error) {
+          throw new Error(jsonData.error);
+        }
+      } catch (e) {
+        if (!hasReceivedResult) {
+          throw new Error('No valid response received from translation service');
+        }
+      }
+    }
+
+    // If no result received, throw error
+    if (!hasReceivedResult) {
+      throw new Error('Translation completed but no files were returned');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,126 +214,39 @@ export default function PDFTranslator() {
     setStatus('processing');
     setCurrentFileIndex(0);
 
+    let successCount = 0;
+    let errorCount = 0;
+
     for (let i = 0; i < files.length; i++) {
-      setCurrentFileIndex(i);
-      setFiles(prev => prev.map((f, idx) => 
-        idx === i ? { ...f, status: 'processing' } : f
-      ));
-
       try {
-        setCurrentStep('upload');
-        console.log(`📄 Processing file ${i + 1}/${files.length}:`, files[i].file.name);
-
-        // Create form data
-        const formData = new FormData();
-        formData.append('pdf', files[i].file);
-        formData.append('targetLanguage', targetLanguage);
-        formData.append('sourceLanguage', 'auto');
-
-        const response = await fetch('http://localhost:3000/api/translate', {
-          method: 'POST',
-          headers: {
-            'Accept': 'application/json',
-          },
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Translation failed with status: ${response.status}`);
+        await processFile(i);
+        successCount++;
+        
+        // Delay between files
+        if (i < files.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
-
-        // Stream processing
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error('No response stream available');
-
-        let buffer = '';
-        let lastStep = 'upload';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = new TextDecoder().decode(value);
-          buffer += chunk;
-          
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmedLine = line.trim();
-            if (!trimmedLine) continue;
-
-            // Update steps
-            if (trimmedLine.includes('Detecting source language') && lastStep === 'upload') {
-              setCurrentStep('detect');
-              lastStep = 'detect';
-            } else if (trimmedLine.includes('Starting translation') && lastStep === 'detect') {
-              setCurrentStep('translate');
-              lastStep = 'translate';
-            } else if (trimmedLine.includes('Processing PDF') && lastStep === 'translate') {
-              setCurrentStep('process');
-              lastStep = 'process';
-            } else if (trimmedLine.includes('Translation completed') && lastStep === 'process') {
-              setCurrentStep('complete');
-              lastStep = 'complete';
-            }
-
-            // Parse JSON response
-            try {
-              const jsonData = JSON.parse(trimmedLine);
-              if (jsonData.success && jsonData.files) {
-                setFiles(prev => prev.map((f, idx) => 
-                  idx === i ? { 
-                    ...f, 
-                    status: 'completed',
-                    translatedPath: jsonData.files.single,
-                    mergedPath: jsonData.files.merged
-                  } : f
-                ));
-              }
-            } catch (e) {
-              // Not JSON, continue
-            }
-          }
-        }
-
-        // Process remaining buffer
-        if (buffer.trim()) {
-          try {
-            const jsonData = JSON.parse(buffer.trim());
-            if (jsonData.success && jsonData.files) {
-              setFiles(prev => prev.map((f, idx) => 
-                idx === i ? { 
-                  ...f, 
-                  status: 'completed',
-                  translatedPath: jsonData.files.single,
-                  mergedPath: jsonData.files.merged
-                } : f
-              ));
-            }
-          } catch (e) {
-            // Not JSON
-          }
-        }
-
-        // İstekler arası gecikme
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
       } catch (err) {
         console.error(`❌ Translation error for file ${i + 1}:`, err);
         setFiles(prev => prev.map((f, idx) => 
           idx === i ? { 
             ...f, 
             status: 'error',
-            error: err instanceof Error ? err.message : 'Translation failed'
+            error: err instanceof Error ? err.message : 'Translation failed',
+            retryCount: (f.retryCount || 0)
           } : f
         ));
+        errorCount++;
       }
     }
 
     setStatus('completed');
     setCurrentStep('complete');
+
+    // Show summary
+    if (errorCount > 0) {
+      setError(`Translation completed with ${successCount} successes and ${errorCount} errors. You can retry failed files.`);
+    }
   };
 
   const handleReset = () => {
@@ -212,6 +284,7 @@ export default function PDFTranslator() {
 
   const allFilesCompleted = files.length > 0 && files.every(f => f.status === 'completed' || f.status === 'error');
   const hasCompletedFiles = files.some(f => f.status === 'completed');
+  const hasErrorFiles = files.some(f => f.status === 'error');
 
   return (
     <div className="w-full max-w-4xl backdrop-blur-lg bg-green-900/30 rounded-2xl overflow-hidden shadow-2xl border border-green-700/20">
@@ -307,19 +380,39 @@ export default function PDFTranslator() {
                       <div className={`w-3 h-3 rounded-full ${
                         fileObj.status === 'completed' ? 'bg-green-500' :
                         fileObj.status === 'processing' ? 'bg-yellow-500' :
+                        fileObj.status === 'retrying' ? 'bg-orange-500' :
                         fileObj.status === 'error' ? 'bg-red-500' :
                         'bg-gray-500'
                       }`} />
-                      <span className="text-sm text-white">{fileObj.file.name}</span>
+                      <div>
+                        <span className="text-sm text-white">{fileObj.file.name}</span>
+                        {fileObj.error && (
+                          <p className="text-xs text-red-400 mt-1">{fileObj.error}</p>
+                        )}
+                        {fileObj.retryCount && fileObj.retryCount > 0 && (
+                          <p className="text-xs text-orange-400 mt-1">Retry attempt {fileObj.retryCount}</p>
+                        )}
+                      </div>
                     </div>
-                    {status !== 'processing' && (
-                      <button
-                        onClick={() => removeFile(index)}
-                        className="text-red-400 hover:text-red-300 text-sm"
-                      >
-                        Remove
-                      </button>
-                    )}
+                    <div className="flex gap-2">
+                      {fileObj.status === 'error' && (fileObj.retryCount || 0) < maxRetries && (
+                        <button
+                          onClick={() => retryFile(index)}
+                          className="text-orange-400 hover:text-orange-300 text-sm px-2 py-1 border border-orange-400/30 rounded"
+                          disabled={status === 'processing'}
+                        >
+                          Retry
+                        </button>
+                      )}
+                      {status !== 'processing' && (
+                        <button
+                          onClick={() => removeFile(index)}
+                          className="text-red-400 hover:text-red-300 text-sm"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -368,6 +461,11 @@ export default function PDFTranslator() {
             <div className="space-y-4">
               <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-4 text-green-200">
                 Translation completed for {files.filter(f => f.status === 'completed').length} of {files.length} files
+                {hasErrorFiles && (
+                  <p className="text-sm mt-2 text-orange-300">
+                    {files.filter(f => f.status === 'error').length} files failed. You can retry them individually.
+                  </p>
+                )}
               </div>
               <div className="space-y-3">
                 {files.map((fileObj, index) => 
@@ -398,6 +496,28 @@ export default function PDFTranslator() {
                   )
                 )}
               </div>
+              {hasErrorFiles && (
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-red-400">Failed Files</h3>
+                  {files.map((fileObj, index) => 
+                    fileObj.status === 'error' && (
+                      <div key={index} className="p-4 bg-red-900/20 rounded-lg border border-red-700/20">
+                        <p className="text-sm text-red-400 mb-2">{fileObj.file.name}</p>
+                        <p className="text-xs text-red-300 mb-3">{fileObj.error}</p>
+                        {(fileObj.retryCount || 0) < maxRetries && (
+                          <button
+                            onClick={() => retryFile(index)}
+                            className="px-3 py-1 text-sm bg-orange-600 hover:bg-orange-500 text-white rounded"
+                            disabled={status === 'processing'}
+                          >
+                            Retry ({maxRetries - (fileObj.retryCount || 0)} attempts left)
+                          </button>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
               <button
                 onClick={handleReset}
                 className="w-full py-3 px-4 rounded-lg font-medium bg-green-600 hover:bg-green-500 text-white shadow-lg hover:shadow-green-600/25 transition-all duration-300"
