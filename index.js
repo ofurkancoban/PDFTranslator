@@ -15,7 +15,7 @@ import { execSync } from 'child_process';
 
 let chromiumPath;
 try {
-  chromiumPath = execSync('which chromium').toString().trim();
+  chromiumPath = execSync('which chromium || which chromium-browser || which google-chrome').toString().trim();
   console.log('✅ Chromium path:', chromiumPath);
 } catch (err) {
   console.error('❌ Chromium not found:', err.message);
