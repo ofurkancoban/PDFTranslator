@@ -85,7 +85,7 @@ async function downloadWithPuppeteerFetch(page, url, destinationPath) {
 
 async function runTranslationWithStream(filePath, targetLanguage, res) {
   const browser = await puppeteer.launch({ 
-    headless: false, 
+    headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
     defaultViewport: null
   });

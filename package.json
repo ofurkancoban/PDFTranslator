@@ -11,6 +11,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "caniuse-lite": "^1.0.30001718",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.18.3",
@@ -36,7 +37,7 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.3.0",
-    "vite": "^5.4.2"
+    "vite": "^6.3.5"
   },
   "description": "A web application that translates PDF documents while preserving their original formatting. The application provides both side-by-side comparison and translated-only versions of the documents.",
   "main": "index.js",

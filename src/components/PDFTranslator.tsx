@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Upload, Languages, Download, Globe } from 'lucide-react';
+import { languages } from '../data/languages';
 
 type TranslationStep = 'upload' | 'detect' | 'translate' | 'process' | 'complete';
 
 export default function PDFTranslator() {
   const [file, setFile] = useState<File | null>(null);
-  const [targetLanguage, setTargetLanguage] = useState('');
+  const [targetLanguage, setTargetLanguage] = useState('tr');
   const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle');
   const [currentStep, setCurrentStep] = useState<TranslationStep>('upload');
   const [error, setError] = useState<string | null>(null);
@@ -200,7 +201,7 @@ export default function PDFTranslator() {
 
   const handleReset = () => {
     setFile(null);
-    setTargetLanguage('');
+    setTargetLanguage('tr');
     setStatus('idle');
     setError(null);
     setTranslatedFile(null);
@@ -284,9 +285,9 @@ export default function PDFTranslator() {
             </div>
             <div className="mt-2 text-sm text-green-400/80 text-center">
               {currentStep === 'upload' && 'File uploaded successfully'}
-              {currentStep === 'detect' && 'Verifying reCAPTCHA...'}
+              {currentStep === 'detect' && 'Detecting the language...'}
               {currentStep === 'translate' && 'Translation in progress...'}
-              {currentStep === 'process' && 'Processing PDF with Python...'}
+              {currentStep === 'process' && 'Processing PDF...'}
               {currentStep === 'complete' && 'All processes completed!'}
             </div>
           </div>
@@ -339,14 +340,11 @@ export default function PDFTranslator() {
                 className="block w-full pl-10 pr-3 py-2 bg-green-900/30 border border-green-700/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">Select a language</option>
-                <option value="de">German</option>
-                <option value="fr">French</option>
-                <option value="es">Spanish</option>
-                <option value="it">Italian</option>
-                <option value="pt">Portuguese</option>
-                <option value="nl">Dutch</option>
-                <option value="pl">Polish</option>
-                <option value="ru">Russian</option>
+                {languages.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
