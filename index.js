@@ -476,11 +476,17 @@ app.get('/api/test-chrome', async (req, res) => {
     const chromePath = findChromiumPath();
     console.log('Chromium path:', chromePath);
     const browser = await puppeteer.launch({
-      headless: false,
-      executablePath: chromePath,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      defaultViewport: null,
-    });
+  headless: 'new',
+  executablePath: findChromiumPath(),
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',  // Özellikle low-memory konteynerler için
+    '--single-process',
+    '--no-zygote',
+  ],
+  protocolTimeout: 120000 // 2 dakika timeout
+});
     await browser.close();
     res.send('Chromium çalışıyor! Path: ' + chromePath);
   } catch (e) {
