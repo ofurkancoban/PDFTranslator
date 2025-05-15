@@ -1,6 +1,7 @@
 // ✅ index.js — Streaming destekli, progress bar ile uyumlu tam çalışan backend
 
 import puppeteer from 'puppeteer';
+import { executablePath } from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import fetch from 'node-fetch';
@@ -467,6 +468,24 @@ app.get('/api/check-file', (req, res) => {
   }
 });
 
+app.get('/api/hello', (req, res) => {
+  res.json({ message: 'Backend is working!' });
+});
+
+app.get('/api/test-chrome', async (req, res) => {
+  try {
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: getChromiumPath(),
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      defaultViewport: null,
+    });
+    await browser.close();
+    res.send('Chromium çalışıyor!');
+  } catch (e) {
+    res.status(500).send('Chromium açılmıyor: ' + e.message);
+  }
+});
 const DIST_PATH = path.join(__dirname, 'dist');
 app.use(express.static(DIST_PATH));
 app.get('*', (req, res) => {
