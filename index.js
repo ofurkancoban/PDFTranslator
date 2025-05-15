@@ -476,7 +476,7 @@ app.get('/api/test-chrome', async (req, res) => {
     const chromePath = findChromiumPath();
     console.log('Chromium path:', chromePath);
     const browser = await puppeteer.launch({
-      headless: 'new',
+      headless: false,
       executablePath: chromePath,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
       defaultViewport: null,
