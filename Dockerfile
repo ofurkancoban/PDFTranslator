@@ -1,3 +1,17 @@
+# 1. Aşama: Frontend'i build et (Vite/React için)
+FROM node:20-slim AS frontend
+
+WORKDIR /app
+
+# Sadece package dosyalarını kopyala ve install
+COPY package*.json ./
+RUN npm install
+
+# Tüm kodu kopyala ve build et
+COPY . .
+RUN npm run build    # Vite ile dist/ klasörü oluşur
+
+# 2. Aşama: Production için backend image'ı oluştur
 FROM node:20-slim
 
 # Gerekli bağımlılıkları yükle
@@ -38,26 +52,26 @@ RUN apt-get update && apt-get install -y \
   libxtst6 \
   lsb-release \
   xdg-utils \
+  chromium \
   && rm -rf /var/lib/apt/lists/*
 
-# Chromium'u indir ve kur
-RUN apt-get update && apt-get install -y chromium
-
-# Çalışma klasörünü ayarla
 WORKDIR /app
 
-# Package.json ve lock'u kopyala, sonra bağımlılıkları yükle
+# Sadece production bağımlılıklarını yükle
 COPY package*.json ./
-RUN npm install
+RUN npm install --omit=dev
 
-# Proje dosyalarını kopyala
+# Backend dosyalarını ve frontend'in build edilmiş dist/ klasörünü kopyala
+COPY --from=frontend /app/dist ./dist
 COPY . .
 
-# PORT ayarla
-ENV PORT=8080
-
-# Puppeteer'a chromium path ver (env ile ya da launch ile)
+# Puppeteer'a chromium path ver
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-# Uygulamayı başlat
+ENV NODE_ENV=production
+ENV PORT=8080
+
+EXPOSE 8080
+
+# Başlatıcı komut
 CMD ["npm", "start"]
