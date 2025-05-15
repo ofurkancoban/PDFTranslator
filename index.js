@@ -446,6 +446,11 @@ app.get('/api/check-file', (req, res) => {
   }
 });
 
+const DIST_PATH = path.join(__dirname, 'dist');
+app.use(express.static(DIST_PATH));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(DIST_PATH, 'index.html'));
+});
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
 });

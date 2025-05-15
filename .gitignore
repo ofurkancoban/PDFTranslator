@@ -1,0 +1,7 @@
+.env
+/uploads
+/translated
+/dist
+node_modules
+myenv
+.vite
