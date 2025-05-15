@@ -481,6 +481,30 @@ app.get('/api/check-file', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
+app.get('/api/test-chrome', async (req, res) => {
+  try {
+    const chromePath = getChromiumPath();
+    console.log('Chromium path:', chromePath);
+    const browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: chromePath,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      defaultViewport: null,
+    });
+    await browser.close();
+    res.send('Chromium çalışıyor! Path: ' + chromePath);
+  } catch (e) {
+    res.status(500).send('Chromium açılmıyor: ' + e.message);
+  }
+});
+
+
+app.get('/api/hello', (req, res) => {
+  res.json({ message: 'Backend is working!' });
+});
+
 const DIST_PATH = path.join(__dirname, 'dist');
 app.use(express.static(DIST_PATH));
 app.get('*', (req, res) => {
