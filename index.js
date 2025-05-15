@@ -485,7 +485,7 @@ app.get('/api/check-file', (req, res) => {
 
 app.get('/api/test-chrome', async (req, res) => {
   try {
-    const chromePath = getChromiumPath();
+    const chromePath = findChromiumPath();
     console.log('Chromium path:', chromePath);
     const browser = await puppeteer.launch({
       headless: 'new',
