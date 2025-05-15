@@ -54,6 +54,29 @@ const {
   API_KEY
 } = process.env;
 
+function findChromiumPath() {
+  const paths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome-stable',
+    '/bin/chromium-browser'
+  ];
+  for (const p of paths) {
+    if (fs.existsSync(p)) return p;
+  }
+  // Sistem PATH'inde varsa which ile bul
+  try {
+    const whichChromium = execSync('which chromium || which chromium-browser || which google-chrome-stable', { encoding: 'utf-8' }).trim();
+    if (whichChromium) return whichChromium;
+  } catch (e) {}
+  // fallback
+  try {
+    return executablePath();
+  } catch (e) {
+    return undefined;
+  }
+}
+
 async function solveCaptcha(sitekey, pageUrl) {
   console.log('🔍 Starting CAPTCHA solving process...');
  
@@ -95,9 +118,12 @@ async function downloadWithPuppeteerFetch(page, url, destinationPath) {
 async function runTranslationWithStream(filePath, targetLanguage, res) {
   const browser = await puppeteer.launch({
   headless: 'new',
-  executablePath: chromiumPath, // 🔥 sistem chromium burada tanımlı
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  defaultViewport: null
+  executablePath: findChromiumPath(),
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+  ],
+  defaultViewport: null,
 });
   
   try {
@@ -458,4 +484,5 @@ app.get('/api/check-file', (req, res) => {
 
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
+  console.log('Kullanılan Chromium path:', findChromiumPath());
 });
