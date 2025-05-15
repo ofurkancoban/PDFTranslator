@@ -47,16 +47,15 @@ const {
 } = process.env;
 
 function getChromiumPath() {
-  // Railway, Render, Vercel gibi sunucular için en sağlam sıralama:
   const candidates = [
     '/usr/bin/chromium',
     '/usr/bin/google-chrome-stable',
-    '/usr/bin/chromium-browser',
+    '/bin/chromium-browser',         // <--- BUNU EKLE!
+    '/usr/bin/chromium-browser',     // (hala sona bırak)
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  // fallback to Puppeteer's bundled chromium (local dev)
   try {
     return executablePath();
   } catch (e) {
