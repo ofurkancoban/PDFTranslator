@@ -49,18 +49,14 @@ const {
 function getChromiumPath() {
   const candidates = [
     '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
     '/usr/bin/google-chrome-stable',
-    '/bin/chromium-browser',         // <--- BUNU EKLE!
-    '/usr/bin/chromium-browser',     // (hala sona bırak)
+    '/bin/chromium-browser',
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  try {
-    return executablePath();
-  } catch (e) {
-    return undefined;
-  }
+  return undefined;
 }
 
 async function solveCaptcha(sitekey, pageUrl) {
