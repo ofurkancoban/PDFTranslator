@@ -157,7 +157,7 @@ async function runTranslationWithStream(filePath, targetLanguage, res) {
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     console.log('🔍 Waiting for CAPTCHA iframe...');
-    await page.waitForSelector('iframe[src*="recaptcha"]', { timeout: 30000 });
+    await page.waitForSelector('iframe[src*="recaptcha"]', { timeout: 60000 });
     const frameEl = await page.$('iframe[src*="recaptcha"]');
     const src = await frameEl.evaluate(el => el.getAttribute('src'));
     const sitekey = src.split('k=')[1].split('&')[0];
