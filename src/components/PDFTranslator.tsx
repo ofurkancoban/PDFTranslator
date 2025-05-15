@@ -99,7 +99,7 @@ export default function PDFTranslator() {
     formData.append('targetLanguage', targetLanguage);
     formData.append('sourceLanguage', 'auto');
 
-    const response = await fetch('pdftranslator-production.up.railway.app/api/translate', {
+    const response = await fetch('api/translate', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
