@@ -59,6 +59,7 @@ function getChromiumPath() {
   return undefined;
 }
 
+
 async function solveCaptcha(sitekey, pageUrl) {
   console.log('🔍 Starting CAPTCHA solving process...');
  
