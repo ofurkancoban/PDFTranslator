@@ -1,7 +1,10 @@
 import { useState, useRef } from 'react';
 import { Upload, Languages, Download, Globe } from 'lucide-react';
 import { languages } from '../data/languages';
+import { getApiBase } from '../utils/apiBase'; // Eğer utils dosyası açtıysan
 
+
+const API_BASE = getApiBase();
 type TranslationStep = 'upload' | 'detect' | 'translate' | 'process' | 'complete';
 
 interface FileTranslation {
@@ -99,7 +102,7 @@ export default function PDFTranslator() {
     formData.append('targetLanguage', targetLanguage);
     formData.append('sourceLanguage', 'auto');
 
-    const response = await fetch('/api/translate', {
+    const response = await fetch('${API_BASE}/api/translate', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -261,7 +264,7 @@ export default function PDFTranslator() {
   const handleDownload = async (filePath: string) => {
     try {
       console.log('Attempting to download file:', filePath);
-      const response = await fetch(`/api/download?file=${encodeURIComponent(filePath)}`);
+      const response = await fetch(`${API_BASE}/api/download?file=${encodeURIComponent(filePath)}`);
       
       if (!response.ok) {
         const errorData = await response.json();
