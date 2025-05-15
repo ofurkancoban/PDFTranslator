@@ -157,7 +157,7 @@ async function runTranslationWithStream(filePath, targetLanguage, res) {
     await new Promise(resolve => setTimeout(resolve, 5000));
     
     console.log('🔍 Waiting for CAPTCHA iframe...');
-    await page.waitForSelector('iframe[src*="recaptcha"]', { timeout: 60000 });
+    await page.waitForSelector('iframe[src*="recaptcha"]', { timeout: 30000 });
     const frameEl = await page.$('iframe[src*="recaptcha"]');
     const src = await frameEl.evaluate(el => el.getAttribute('src'));
     const sitekey = src.split('k=')[1].split('&')[0];
@@ -477,7 +477,7 @@ app.get('/api/test-chrome', async (req, res) => {
     console.log('Chromium path:', chromePath);
     const browser = await puppeteer.launch({
   headless: 'new',
-  executablePath: findChromiumPath(),
+  executablePath: '/workspace/.cache/puppeteer/chrome/linux-127.0.6533.88/chrome-linux64/chrome',
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',
