@@ -481,7 +481,7 @@ app.get('/api/check-file', (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-//
+
 app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
   console.log('Kullanılan Chromium path:', findChromiumPath());
