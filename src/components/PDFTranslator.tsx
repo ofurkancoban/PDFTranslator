@@ -99,7 +99,7 @@ export default function PDFTranslator() {
     formData.append('targetLanguage', targetLanguage);
     formData.append('sourceLanguage', 'auto');
 
-    const response = await fetch('api/translate', {
+    const response = await fetch('/api/translate', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -261,7 +261,7 @@ export default function PDFTranslator() {
   const handleDownload = async (filePath: string) => {
     try {
       console.log('Attempting to download file:', filePath);
-      const response = await fetch(`http://localhost:3000/api/download?file=${encodeURIComponent(filePath)}`);
+      const response = await fetch(`/api/download?file=${encodeURIComponent(filePath)}`);
       
       if (!response.ok) {
         const errorData = await response.json();
