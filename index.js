@@ -47,15 +47,16 @@ const {
 } = process.env;
 
 function getChromiumPath() {
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
+  // Railway, Render, Vercel gibi sunucular için en sağlam sıralama:
   const candidates = [
-    '/usr/bin/chromium-browser',
     '/usr/bin/chromium',
     '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium-browser',
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
+  // fallback to Puppeteer's bundled chromium (local dev)
   try {
     return executablePath();
   } catch (e) {
@@ -474,18 +475,21 @@ app.get('/api/hello', (req, res) => {
 
 app.get('/api/test-chrome', async (req, res) => {
   try {
+    const chromePath = getChromiumPath();
+    console.log('Chromium path:', chromePath);
     const browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: getChromiumPath(),
+      executablePath: chromePath,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
       defaultViewport: null,
     });
     await browser.close();
-    res.send('Chromium çalışıyor!');
+    res.send('Chromium çalışıyor! Path: ' + chromePath);
   } catch (e) {
     res.status(500).send('Chromium açılmıyor: ' + e.message);
   }
 });
+
 const DIST_PATH = path.join(__dirname, 'dist');
 app.use(express.static(DIST_PATH));
 app.get('*', (req, res) => {
