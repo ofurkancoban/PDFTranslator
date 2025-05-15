@@ -50,7 +50,7 @@ WORKDIR /app
 # Node.js Bağımlılıkları
 COPY package*.json ./
 RUN npm install
-
+RUN npm run build
 # Proje dosyaları
 COPY . .
 
