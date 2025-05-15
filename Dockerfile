@@ -1,22 +1,9 @@
-# 1. Aşama: Frontend'i build et (Vite/React için)
-FROM node:20-slim AS frontend
-
-WORKDIR /app
-
-# Sadece package dosyalarını kopyala ve install
-COPY package*.json ./
-RUN npm install
-
-# Tüm kodu kopyala ve build et
-COPY . .
-RUN npm run build    # Vite ile dist/ klasörü oluşur
-
-# 2. Aşama: Production için backend image'ı oluştur
 FROM node:20-slim
 
-# Gerekli bağımlılıkları yükle
+# System Dependencies
 RUN apt-get update && apt-get install -y \
   wget \
+  python3 python3-pip python3-venv \
   ca-certificates \
   fonts-liberation \
   fonts-noto-color-emoji \
@@ -52,26 +39,30 @@ RUN apt-get update && apt-get install -y \
   libxtst6 \
   lsb-release \
   xdg-utils \
-  chromium \
   && rm -rf /var/lib/apt/lists/*
 
+# Chromium
+RUN apt-get update && apt-get install -y chromium
+
+# Çalışma dizini
 WORKDIR /app
 
-# Sadece production bağımlılıklarını yükle
+# Node.js Bağımlılıkları
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
-# Backend dosyalarını ve frontend'in build edilmiş dist/ klasörünü kopyala
-COPY --from=frontend /app/dist ./dist
+# Proje dosyaları
 COPY . .
 
-# Puppeteer'a chromium path ver
+# Python Sanal Ortam ve Gereksinimler
+RUN python3 -m venv myenv && \
+    . myenv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Ortam değişkenleri
+ENV PORT=8080
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
-ENV NODE_ENV=production
-ENV PORT=8080
-
-EXPOSE 8080
-
-# Başlatıcı komut
+# Uygulama başlat
 CMD ["npm", "start"]
