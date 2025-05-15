@@ -40,7 +40,6 @@ aptPkgs = [
   "libxrender1",
   "libxss1",
   "libxtst6",
-  "libgconf-2-4",
   "libgdk-pixbuf2.0-0",
   "libnotify4",
   "libsqlite3-0",
