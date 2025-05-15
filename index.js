@@ -45,6 +45,23 @@ const {
   API_KEY
 } = process.env;
 
+function getChromiumPath() {
+  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
+  const candidates = [
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome-stable',
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  try {
+    return executablePath();
+  } catch (e) {
+    return undefined;
+  }
+}
+
 async function solveCaptcha(sitekey, pageUrl) {
   console.log('🔍 Starting CAPTCHA solving process...');
  
@@ -84,10 +101,14 @@ async function downloadWithPuppeteerFetch(page, url, destinationPath) {
 }
 
 async function runTranslationWithStream(filePath, targetLanguage, res) {
-  const browser = await puppeteer.launch({ 
+  const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: null
+    executablePath: getChromiumPath(),
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+    ],
+    defaultViewport: null,
   });
   
   try {
