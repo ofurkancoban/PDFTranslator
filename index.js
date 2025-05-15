@@ -57,24 +57,12 @@ const {
 function findChromiumPath() {
   const paths = [
     '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome-stable',
-    '/bin/chromium-browser'
+    '/usr/bin/google-chrome-stable'
   ];
   for (const p of paths) {
     if (fs.existsSync(p)) return p;
   }
-  // Sistem PATH'inde varsa which ile bul
-  try {
-    const whichChromium = execSync('which chromium || which chromium-browser || which google-chrome-stable', { encoding: 'utf-8' }).trim();
-    if (whichChromium) return whichChromium;
-  } catch (e) {}
-  // fallback
-  try {
-    return executablePath();
-  } catch (e) {
-    return undefined;
-  }
+  return undefined;
 }
 
 async function solveCaptcha(sitekey, pageUrl) {
