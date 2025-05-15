@@ -51,8 +51,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Proje dosyaları
-COPY . .
+COPY . .                # kodlar kopyalanır
+
+RUN npm run build       # <-- dist oluşturulur
 
 # Python Sanal Ortam ve Gereksinimler
 RUN python3 -m venv myenv && \
