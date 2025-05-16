@@ -51,7 +51,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-COPY . .                # kodlar kopyalanır
+COPY . .
 
 RUN npm run build       # <-- dist oluşturulur
 
