@@ -64,7 +64,11 @@ RUN npm install --omit=dev
 # Backend dosyalarını ve frontend'in build edilmiş dist/ klasörünü kopyala
 COPY --from=frontend /app/dist ./dist
 COPY . .
-
+# Python Sanal Ortam ve Gereksinimler
+RUN python3 -m venv myenv && \
+    . myenv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
 # Puppeteer'a chromium path ver
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
