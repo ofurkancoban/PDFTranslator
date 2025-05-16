@@ -74,6 +74,7 @@ RUN apt-get update && apt-get install -y \
   && . /app/myenv/bin/activate \
   && pip install --upgrade pip \
   && pip install --break-system-packages PyMuPDF python-dotenv\
+  && pip3 install --break-system-packages PyMuPDF python-dotenv\
   && pip install --break-system-packages -r requirements.txt
 # Puppeteer'a chromium path ver
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
