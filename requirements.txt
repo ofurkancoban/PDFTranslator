@@ -1,2 +1,2 @@
-pymupdf
+PyMuPDF
 python-dotenv
