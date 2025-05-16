@@ -68,10 +68,13 @@ RUN npm install --omit=dev
 COPY --from=frontend /app/dist ./dist
 COPY . .
 # Python Sanal Ortam ve Gereksinimler
-RUN python3 -m venv myenv && \
-    . myenv/bin/activate && \
-    pip install --upgrade pip && \
-    pip install -r requirements.txt
+RUN apt-get update && apt-get install -y \
+  python3 python3-pip python3-venv python3-wheel \
+  && python3 -m venv /app/myenv \
+  && . /app/myenv/bin/activate \
+  && pip install --upgrade pip \
+  && pip install --break-system-packages PyMuPDF python-dotenv\
+  && pip install --break-system-packages -r requirements.txt
 # Puppeteer'a chromium path ver
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
