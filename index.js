@@ -252,16 +252,20 @@ async function runTranslationWithStream(filePath, targetLanguage, res) {
 
     const originalFilename = path.basename(filePath, '.pdf');
     const downloadFileName = path.basename(downloadHref);
-    const langMatch = downloadFileName.match(/\.([a-z]{2})\.([a-z]{2})\.pdf$/);
 
-    if (!langMatch) {
-      throw new Error('⚠️ Language codes could not be parsed from download filename.');
+    let fileName, sourceLang, targetLang;
+    const langMatch = downloadFileName.match(/([a-z]{2})\.([a-z]{2})\.pdf$/i);
+    if (langMatch) {
+      sourceLang = langMatch[1];
+      targetLang = langMatch[2];
+      fileName = `${originalFilename}_${sourceLang}.${targetLang}.pdf`;
+    } else {
+      // Fallback: if not parsable, use original filename and request's targetLanguage
+      sourceLang = 'auto';
+      targetLang = targetLanguage;
+      fileName = `${originalFilename}_${sourceLang}.${targetLang}.pdf`;
+      console.warn('⚠️ Could not detect language codes from download filename, using fallback:', fileName);
     }
-
-    const sourceLang = langMatch[1];
-    const targetLang = langMatch[2];
-
-    const fileName = `${originalFilename}_${sourceLang}.${targetLang}.pdf`;
     const destination = path.join(DOWNLOAD_DIR, fileName);
 
     res.write('Downloading translated file...\n');
