@@ -24,18 +24,17 @@ try:
 
     # ✅ Dosya adı analiz (ör: abc_tr.it.pdf)
     translated_name = translated_path.name
-    lang_match = re.search(r'^(.+)_([a-z]{2})\.([a-z]{2})\.pdf$', translated_name, re.I)
+    lang_match = re.search(r'^(.+)_([a-z]{2})\.([a-z]{2})\.pdf$', translated_name)
 
     if lang_match:
         original_stem = lang_match.group(1)
         from_lang = lang_match.group(2)
         target_lang = lang_match.group(3)
     else:
-        # fallback: dosya adında yoksa, komut parametrelerinden kullan
         original_stem = original_path.stem
         from_lang = "auto"
         target_lang = to_lang
-        print("⚠️ Could not detect language codes from translated filename, using fallback.")
+        print("⚠️ Could not detect language codes from translated filename.")
 
     # ✅ Doğru çıktı adları
     single_output = f"{original_stem}_{from_lang}.{target_lang}_single.pdf"
@@ -56,7 +55,7 @@ try:
     print("🧼 Removing watermark text...")
     for page in doc:
         for block in page.get_text("blocks"):
-            if DOM and DOM.lower() in block[4].lower():
+            if DOM.lower() in block[4].lower():
                 rect = fitz.Rect(block[:4])
                 page.add_redact_annot(rect, fill=(1, 1, 1))
         page.apply_redactions()
