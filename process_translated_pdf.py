@@ -12,6 +12,17 @@ if len(sys.argv) < 4:
     print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang")
     sys.exit(1)
 
+def flatten_pdf_rotation(pdf_path):
+    doc = fitz.open(pdf_path)
+    changed = False
+    for page in doc:
+        if page.rotation != 0:
+            page.set_rotation(0)
+            changed = True
+    if changed:
+        doc.save(pdf_path, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
+    doc.close()
+
 try:
     original_path = Path(sys.argv[1])
     translated_path = Path(sys.argv[2])
@@ -22,7 +33,9 @@ try:
     if not translated_path.exists():
         raise FileNotFoundError(f"Translated file not found: {translated_path}")
 
-    # ✅ Dosya adı analiz (ör: abc_tr.it.pdf)
+    flatten_pdf_rotation(str(original_path))
+    flatten_pdf_rotation(str(translated_path))
+
     translated_name = translated_path.name
     lang_match = re.search(r'^(.+)_([a-z]{2})\.([a-z]{2})\.pdf$', translated_name)
 
