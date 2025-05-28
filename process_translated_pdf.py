@@ -4,6 +4,88 @@ from pathlib import Path
 import re
 from dotenv import load_dotenv
 import os
+import tempfile
+import pikepdf
+from pypdf import PdfReader, PdfWriter, Transformation
+
+# --- KOŞULLU NORMALİZE & ROTATE SİSTEMİ ---
+
+def box_tuple(box):
+    return tuple(float(x) for x in box)
+
+def is_problematic_page(page):
+    mediabox = box_tuple(page.mediabox)
+    cropbox = box_tuple(page.cropbox)
+    rotate = page.get('/Rotate', 0)
+    return mediabox != cropbox or rotate != 0
+
+def normalize_pdf(input_path, temp_output):
+    with pikepdf.open(input_path) as pdf:
+        new_pdf = pikepdf.Pdf.new()
+        for page in pdf.pages:
+            if '/Rotate' in page:
+                del page['/Rotate']
+            if '/CropBox' in page and page['/CropBox'] != page['/MediaBox']:
+                page['/MediaBox'] = page['/CropBox']
+                del page['/CropBox']
+            new_pdf.pages.append(page)
+        new_pdf.Root.Info = pikepdf.Dictionary()
+        new_pdf.save(temp_output)
+
+def rotate_pdf_left_90_conditional(orig_input_path, input_path, output_path):
+    orig_reader = PdfReader(orig_input_path)
+    reader = PdfReader(input_path)
+    writer = PdfWriter()
+    for orig_page, page in zip(orig_reader.pages, reader.pages):
+        if is_problematic_page(orig_page):
+            width = float(page.mediabox.width)
+            height = float(page.mediabox.height)
+            tf = Transformation().rotate(-90).translate(tx=0, ty=width)
+            page.add_transformation(tf)
+            page.mediabox.upper_right = (height, width)
+            page.cropbox.upper_right = (height, width)
+            page.rotate = 0
+        writer.add_page(page)
+    with open(output_path, "wb") as f:
+        writer.write(f)
+
+def normalize_and_rotate_conditional(input_pdf_path):
+    """
+    Eğer problemli bir sayfa varsa PDF'yi normalize ve döndür.
+    Yoksa girdi dosyasını aynen döndür.
+    Her durumda dönen dosya path'i kesinlikle yeni bir temp dosya olur!
+    """
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_norm:
+        temp_norm_path = tmp_norm.name
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_final:
+        temp_final_path = tmp_final.name
+
+    try:
+        need_process = False
+        with PdfReader(input_pdf_path) as reader:
+            for page in reader.pages:
+                if is_problematic_page(page):
+                    need_process = True
+                    break
+
+        if need_process:
+            normalize_pdf(input_pdf_path, temp_norm_path)
+            rotate_pdf_left_90_conditional(input_pdf_path, temp_norm_path, temp_final_path)
+            os.remove(temp_norm_path)
+            return temp_final_path
+        else:
+            # Hiç işlem yoksa, orijinal dosyanın bir kopyasını döndür
+            with open(input_pdf_path, "rb") as src, open(temp_final_path, "wb") as dst:
+                dst.write(src.read())
+            return temp_final_path
+    except Exception as e:
+        # Temp dosyaları temizle
+        if os.path.exists(temp_norm_path): os.remove(temp_norm_path)
+        if os.path.exists(temp_final_path): os.remove(temp_final_path)
+        raise e
+
+# --- ANA PDF SCRIPTİ ---
 
 load_dotenv()
 DOM = os.getenv("DOM")
@@ -11,17 +93,6 @@ DOM = os.getenv("DOM")
 if len(sys.argv) < 4:
     print("Usage: python process_translated_pdf.py original.pdf translated.pdf to_lang")
     sys.exit(1)
-
-def flatten_pdf_rotation(pdf_path):
-    doc = fitz.open(pdf_path)
-    changed = False
-    for page in doc:
-        if page.rotation != 0:
-            page.set_rotation(0)
-            changed = True
-    if changed:
-        doc.save(pdf_path, incremental=True, encryption=fitz.PDF_ENCRYPT_KEEP)
-    doc.close()
 
 try:
     original_path = Path(sys.argv[1])
@@ -33,9 +104,11 @@ try:
     if not translated_path.exists():
         raise FileNotFoundError(f"Translated file not found: {translated_path}")
 
-    flatten_pdf_rotation(str(original_path))
-    flatten_pdf_rotation(str(translated_path))
+    # --- PDF'LERİ KOŞULLU NORMALİZE ET ---
+    normalized_original_path = normalize_and_rotate_conditional(str(original_path))
+    normalized_translated_path = normalize_and_rotate_conditional(str(translated_path))
 
+    # ✅ Dosya adı analiz (ör: abc_tr.it.pdf)
     translated_name = translated_path.name
     lang_match = re.search(r'^(.+)_([a-z]{2})\.([a-z]{2})\.pdf$', translated_name)
 
@@ -59,7 +132,7 @@ try:
     print(f"Merged: {merged_output}")
 
     # ✅ Translated PDF aç ve doğrula
-    doc = fitz.open(translated_path)
+    doc = fitz.open(normalized_translated_path)
     if not doc.is_pdf or doc.page_count == 0:
         raise ValueError("Invalid or empty PDF.")
     print(f"✅ PDF is valid with {doc.page_count} pages")
@@ -75,7 +148,7 @@ try:
 
     # 🖼 Başlık görüntüsünü al ve yerleştir
     print("🖼 Extracting and overlaying top header from original...")
-    orig = fitz.open(original_path)
+    orig = fitz.open(normalized_original_path)
     width, height = orig[0].rect.width, orig[0].rect.height
     clip_rect = fitz.Rect(0, 0, width, 20)
     pix = orig[0].get_pixmap(clip=clip_rect)
@@ -124,6 +197,13 @@ try:
         print(f"🗑 Deleted temporary translated PDF: {translated_path.name}")
     except Exception as e:
         print(f"⚠️ Could not delete {translated_path.name}: {str(e)}")
+
+    # --- Normalize edilen temp dosyalarını temizle
+    for tmpf in [normalized_original_path, normalized_translated_path]:
+        try:
+            os.remove(tmpf)
+        except Exception:
+            pass
 
 except Exception as e:
     print(f"❌ Fatal error: {str(e)}")
