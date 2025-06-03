@@ -195,7 +195,7 @@ async function runTranslationWithStream(filePath, targetLanguage, res) {
     await page.waitForFunction(() => {
       const button = document.querySelector('#translation-button');
       return button && !button.disabled;
-    }, { timeout: 60000 });
+    }, { timeout: 100000 });
 
     // Click the button using a proper event
     await page.evaluate(() => {
@@ -214,7 +214,7 @@ async function runTranslationWithStream(filePath, targetLanguage, res) {
     // Wait for navigation and page load
     await page.waitForNavigation({
       waitUntil: 'networkidle2',
-      timeout: 60000
+      timeout: 100000
     });
     console.log('✅ Navigation completed');
 
