@@ -189,13 +189,13 @@ async function runTranslationWithStream(filePath, targetLanguage, res) {
     res.write('CAPTCHA solved, proceeding with translation...\n');
 
     console.log('⏳ Waiting for translation button...');
-    await page.waitForSelector('#translation-button', { timeout: 10000 });
+    await page.waitForSelector('#translation-button', { timeout: 15000 });
 
     // Wait for button to be enabled
     await page.waitForFunction(() => {
       const button = document.querySelector('#translation-button');
       return button && !button.disabled;
-    }, { timeout: 100000 });
+    }, { timeout: 15000 });
 
     // Click the button using a proper event
     await page.evaluate(() => {
